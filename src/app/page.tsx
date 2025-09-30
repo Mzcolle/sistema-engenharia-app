@@ -91,27 +91,36 @@ export default function EngineeringApp( ) {
     fetchInitialData();
   }, []);
 
-  const handleSaveCards = async () => {
+    const handleSaveCards = async () => {
     setIsSaving(true);
     try {
       const response = await fetch(`${API_URL}/cards`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(cards),
       });
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Falha ao salvar os cartões.');
+        const errorData = await response.json().catch(() => ({ message: 'Falha ao salvar os cartões. O servidor respondeu com um erro.' }));
+        throw new Error(errorData.message);
       }
+
+      const savedCards = await response.json();
+      setCards(savedCards);
+      
       alert('Configurações salvas com sucesso!');
       setIsAdminAuthenticated(false);
+
     } catch (error) {
-      console.error("Erro ao salvar cartões:", error);
-      alert(`Erro: ${error instanceof Error ? error.message : String(error)}`);
+      console.error("Erro detalhado ao salvar cartões:", error);
+      alert(`Erro ao salvar: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsSaving(false);
     }
   };
+
 
   const handleSaveRelease = async () => {
     if (!currentOS || !currentResponsible) {
