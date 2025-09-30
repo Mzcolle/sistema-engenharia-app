@@ -427,7 +427,7 @@ export default function EngineeringApp( ) {
               ))}
             </div>
             <DialogFooter>
-              <Button onClick={handleSaveCards} disabled={isSaving}>
+              <Button type="button" onClick={handleSaveCards} disabled={isSaving}>
                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 {isSaving ? 'Salvando...' : 'Salvar Configurações'}
               </Button>
