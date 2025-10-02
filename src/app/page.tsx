@@ -1,6 +1,6 @@
 "use client";
 
-//versão final com todas as correções - v11 (CORREÇÃO DE ERROS MAP)
+//versão final com todas as correções - v12 (CORREÇÃO DE ERROS MAP E REGRAS)
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -314,18 +314,75 @@ export default function EngineeringApp( ) {
                     <Card key={ruleIndex} className="p-4 bg-gray-50 border-2 border-gray-200">
                       <div className="flex justify-end mb-2"><Button onClick={() => setRules(rules.filter((_, i) => i !== ruleIndex))} variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-red-500" /></Button></div>
                       <div className="space-y-4 p-4 border rounded-md bg-white">
-                        <Label className="font-bold text-lg">SE (todas as condições forem verdadeiras):</Label>
+                        <Label className="font-bold text-lg">Condições (E):</Label>
                         {/* CORREÇÃO: Verificação de segurança antes do map */}
-                        {Array.isArray(rule.conditions) && rule.conditions.map((cond, condIndex) => (
-                          <div key={condIndex} className="p-3 border rounded-md bg-gray-50 space-y-2">
-                            <div className="flex justify-end"><Button onClick={() => { const newRules = [...rules]; newRules[ruleIndex].conditions.splice(condIndex, 1); setRules(newRules); }} variant="ghost" size="icon" className="h-6 w-6"><Trash2 className="h-3 w-3 text-gray-500" /></Button></div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div><Label>O cartão (Pai)</Label><Select value={cond.parent_card_id} onValueChange={(v) => { const newRules = [...rules]; newRules[ruleIndex].conditions[condIndex].parent_card_id = v; setRules(newRules); }}><SelectTrigger><SelectValue placeholder="Selecione o Cartão Pai" /></SelectTrigger><SelectContent>{Array.isArray(cards) && cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-                              <div><Label>Tiver um dos valores (um por linha)</Label><textarea value={Array.isArray(cond.parent_option_values) ? cond.parent_option_values.join('\n') : ''} placeholder="Valor A&#10;Valor B" className="w-full p-2 border rounded-md min-h-[60px]" onChange={(e) => { const newRules = [...rules]; newRules[ruleIndex].conditions[condIndex].parent_option_values = e.target.value.split('\n').map(v => v.trim()).filter(Boolean); setRules(newRules); }} /></div>
+                        {Array.isArray(rule.conditions) && rule.conditions.map((cond, condIndex) => {
+                          const parentCard = cards.find(c => c.id === cond.parent_card_id);
+                          return (
+                            <div key={condIndex} className="p-3 border rounded-md bg-gray-50 space-y-2">
+                              <div className="flex justify-end"><Button onClick={() => {
+                                const newRules = [...rules];
+                                newRules[ruleIndex].conditions.splice(condIndex, 1);
+                                setRules(newRules);
+                              }} variant="ghost" size="icon" className="h-6 w-6"><Trash2 className="h-3 w-3 text-gray-500" /></Button></div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <Label>Cartão Pai</Label>
+                                  <Select
+                                    value={cond.parent_card_id}
+                                    onValueChange={(v) => {
+                                      const newRules = [...rules];
+                                      newRules[ruleIndex].conditions[condIndex].parent_card_id = v;
+                                      // Limpar parent_option_values se o cartão pai mudar
+                                      newRules[ruleIndex].conditions[condIndex].parent_option_values = [];
+                                      setRules(newRules);
+                                    }}
+                                  >
+                                    <SelectTrigger><SelectValue placeholder="Selecione o Cartão Pai" /></SelectTrigger>
+                                    <SelectContent>
+                                      {Array.isArray(cards) && cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <Label>Valores do Cartão Pai (um por linha)</Label>
+                                  {parentCard?.type === 'dropdown' ? (
+                                    <Select
+                                      multiple
+                                      value={cond.parent_option_values}
+                                      onValueChange={(selectedValues) => {
+                                        const newRules = [...rules];
+                                        newRules[ruleIndex].conditions[condIndex].parent_option_values = selectedValues;
+                                        setRules(newRules);
+                                      }}
+                                      disabled={!parentCard}
+                                    >
+                                      <SelectTrigger><SelectValue placeholder="Selecione os valores" /></SelectTrigger>
+                                      <SelectContent>
+                                        {Array.isArray(parentCard.options) && parentCard.options.map(opt => (
+                                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <textarea
+                                      value={Array.isArray(cond.parent_option_values) ? cond.parent_option_values.join('\n') : ''}
+                                      placeholder="Valor A\nValor B"
+                                      className="w-full p-2 border rounded-md min-h-[60px]"
+                                      onChange={(e) => {
+                                        const newRules = [...rules];
+                                        newRules[ruleIndex].conditions[condIndex].parent_option_values = e.target.value.split('\n').map(v => v.trim()).filter(Boolean);
+                                        setRules(newRules);
+                                      }}
+                                      disabled={!parentCard}
+                                    />
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                        <Button variant="outline" size="sm" onClick={() => { const newRules = [...rules]; newRules[ruleIndex].conditions.push({ parent_card_id: '', parent_option_values: [] }); setRules(newRules); }}><Plus className="mr-2 h-4 w-4" />Adicionar Condição (E)</Button>
+                          );
+                        })}
+                        <Button variant="outline" size="sm" onClick={() => { const newRules = [...rules]; newRules[ruleIndex].conditions.push({ parent_card_id: '', parent_option_values: [] }); setRules(newRules); }}><Plus className="mr-2 h-4 w-4" />Adicionar Condição</Button>
                       </div>
                       <div className="space-y-2 mt-4 p-4 border rounded-md bg-white">
                         <Label className="font-bold text-lg">ENTÃO:</Label>
@@ -343,7 +400,7 @@ export default function EngineeringApp( ) {
         <Dialog open={bulkAddState.open} onOpenChange={(open) => !open && setBulkAddState({ open: false, cardId: null, text: '' })}>
           <DialogContent>
             <DialogHeader><DialogTitle>Adicionar Opções em Massa</DialogTitle></DialogHeader>
-            <div className="py-4 space-y-2"><Label htmlFor="bulk-options">Cole ou digite as opções, uma por linha:</Label><textarea id="bulk-options" value={bulkAddState.text} onChange={(e) => setBulkAddState(prev => ({ ...prev, text: e.target.value }))} className="w-full p-2 border rounded-md min-h-[200px] bg-white" placeholder="Opção A&#10;Opção B&#10;Opção C" /></div>
+            <div className="py-4 space-y-2"><Label htmlFor="bulk-options">Cole ou digite as opções, uma por linha:</Label><textarea id="bulk-options" value={bulkAddState.text} onChange={(e) => setBulkAddState(prev => ({ ...prev, text: e.target.value }))} className="w-full p-2 border rounded-md min-h-[200px] bg-white" placeholder="Opção A\nOpção B\nOpção C" /></div>
             <DialogFooter><Button variant="outline" onClick={() => setBulkAddState({ open: false, cardId: null, text: '' })}>Cancelar</Button><Button onClick={handleBulkAddOptions}>Adicionar Opções</Button></DialogFooter>
           </DialogContent>
         </Dialog>
