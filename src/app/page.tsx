@@ -1,6 +1,6 @@
 "use client";
 
-//versão final com todas as correções - v8 (Correção do 'map')
+//versão final com todas as correções - v9 (BLINDAGEM TOTAL)
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -250,6 +250,12 @@ export default function EngineeringApp( ) {
   // ==================================
   // RENDERIZAÇÃO
   // ==================================
+
+  // BLINDAGEM TOTAL: Se os arrays não foram inicializados, não renderiza NADA.
+  if (!cards || !releases || !rules) {
+      return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-blue-600" /></div>;
+  }
+
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-blue-600" /></div>;
 
   if (currentView === 'home') {
@@ -411,7 +417,6 @@ export default function EngineeringApp( ) {
                       <th className="text-left p-4 font-semibold">OS</th>
                       <th className="text-left p-4 font-semibold">Responsável</th>
                       <th className="text-left p-4 font-semibold">Data</th>
-                      {/* CORREÇÃO AQUI */}
                       {Array.isArray(cards) && cards.map(c => <th key={c.id} className="text-left p-4 font-semibold">{c.name}</th>)}
                     </tr>
                   </thead>
@@ -424,7 +429,6 @@ export default function EngineeringApp( ) {
                           <td className="p-4 font-medium">{os}</td>
                           <td className="p-4">{first?.responsible}</td>
                           <td className="p-4">{first ? new Date(first.releaseDate).toLocaleDateString('pt-BR') : ''}</td>
-                          {/* CORREÇÃO AQUI */}
                           {Array.isArray(cards) && cards.map(c => <td key={c.id} className="p-4">{osReleases.find(r => r.cardId === c.id)?.value || '-'}</td>)}
                         </tr>
                       )
@@ -457,3 +461,4 @@ export default function EngineeringApp( ) {
   );
 }
 
+                    
