@@ -1,6 +1,6 @@
 "use client";
 
-//versão final com todas as correções - v10 (TESTE DE ISOLAMENTO)
+//versão final com todas as correções - v11 (CORREÇÃO DE ERROS MAP)
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -93,12 +93,17 @@ export default function EngineeringApp( ) {
       const releasesData = await releasesRes.json();
       const rulesData = await rulesRes.json();
 
-      setCards(cardsData || []);
-      setReleases(releasesData || []);
-      setRules(rulesData || []);
+      // CORREÇÃO: Garantir que os dados sejam arrays válidos
+      setCards(Array.isArray(cardsData) ? cardsData : []);
+      setReleases(Array.isArray(releasesData) ? releasesData : []);
+      setRules(Array.isArray(rulesData) ? rulesData : []);
     } catch (error) {
       console.error("Falha ao buscar dados iniciais:", error);
       alert("Não foi possível carregar os dados do servidor. Tente recarregar a página.");
+      // CORREÇÃO: Garantir que os estados sejam arrays mesmo em caso de erro
+      setCards([]);
+      setReleases([]);
+      setRules([]);
     } finally {
       setIsLoading(false);
     }
@@ -116,7 +121,7 @@ export default function EngineeringApp( ) {
       });
       if (!response.ok) throw new Error((await response.json()).message || 'Falha ao salvar os cartões.');
       const savedCards = await response.json();
-      setCards(savedCards);
+      setCards(Array.isArray(savedCards) ? savedCards : []);
       alert('Configurações salvas com sucesso!');
     } catch (error) {
       alert(`Erro: ${error instanceof Error ? error.message : String(error)}`);
@@ -271,7 +276,8 @@ export default function EngineeringApp( ) {
               <TabsList className="grid w-full grid-cols-2"><TabsTrigger value="cards">Configurar Cartões</TabsTrigger><TabsTrigger value="rules">Gerenciar Regras</TabsTrigger></TabsList>
               <TabsContent value="cards" className="space-y-6 pt-4">
                 <div className="flex justify-between items-center"><h3 className="text-lg font-semibold">Configurar Cartões</h3><Button onClick={addCard}><Plus className="mr-2 h-4 w-4" />Adicionar Cartão</Button></div>
-                {cards.map((card, index) => (
+                {/* CORREÇÃO: Verificação de segurança antes do map */}
+                {Array.isArray(cards) && cards.map((card, index) => (
                   <Card key={card.id} className="p-4">
                     <div className="space-y-4">
                       <div className="flex items-center gap-4">
@@ -284,13 +290,14 @@ export default function EngineeringApp( ) {
                       {card.type === 'dropdown' && (
                         <div className="space-y-2 pt-4 border-t">
                           <div className="flex justify-between items-center mb-2">
-                            <Button variant="ghost" onClick={() => toggleOptionsVisibility(card.id)} className="flex-grow justify-start px-2">{expandedOptions[card.id] ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />} Opções da Lista ({card.options.length})</Button>
+                            <Button variant="ghost" onClick={() => toggleOptionsVisibility(card.id)} className="flex-grow justify-start px-2">{expandedOptions[card.id] ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />} Opções da Lista ({Array.isArray(card.options) ? card.options.length : 0})</Button>
                             <div className="flex gap-2">
                               <Button onClick={() => setBulkAddState({ open: true, cardId: card.id, text: '' })} size="sm" variant="outline"><Layers className="mr-1 h-3 w-3" />Em Massa</Button>
                               <Button onClick={() => addOptionToCard(card.id)} size="sm" variant="outline"><Plus className="mr-1 h-3 w-3" />Opção</Button>
                             </div>
                           </div>
-                          {expandedOptions[card.id] && card.options.map((opt, i) => (<div key={i} className="flex gap-2 animate-in fade-in-0"><Input value={opt} onChange={(e) => updateCardOption(card.id, i, e.target.value)} /><Button onClick={() => removeCardOption(card.id, i)} variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button></div>))}
+                          {/* CORREÇÃO: Verificação de segurança antes do map */}
+                          {expandedOptions[card.id] && Array.isArray(card.options) && card.options.map((opt, i) => (<div key={i} className="flex gap-2 animate-in fade-in-0"><Input value={opt} onChange={(e) => updateCardOption(card.id, i, e.target.value)} /><Button onClick={() => removeCardOption(card.id, i)} variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button></div>))}
                         </div>
                       )}
                     </div>
@@ -300,19 +307,21 @@ export default function EngineeringApp( ) {
               </TabsContent>
               <TabsContent value="rules" className="space-y-6 pt-4">
                 <div className="flex justify-between items-center"><h3 className="text-lg font-semibold">Regras Condicionais</h3><Button onClick={() => setRules([...rules, { child_card_id: '', child_options: [], conditions: [{ parent_card_id: '', parent_option_values: [] }] }])}><Plus className="mr-2 h-4 w-4" />Adicionar Nova Regra</Button></div>
-                {rules.map((rule, ruleIndex) => {
+                {/* CORREÇÃO: Verificação de segurança antes do map */}
+                {Array.isArray(rules) && rules.map((rule, ruleIndex) => {
                   const childCard = cards.find(c => c.id === rule.child_card_id);
                   return (
                     <Card key={ruleIndex} className="p-4 bg-gray-50 border-2 border-gray-200">
                       <div className="flex justify-end mb-2"><Button onClick={() => setRules(rules.filter((_, i) => i !== ruleIndex))} variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-red-500" /></Button></div>
                       <div className="space-y-4 p-4 border rounded-md bg-white">
                         <Label className="font-bold text-lg">SE (todas as condições forem verdadeiras):</Label>
-                        {rule.conditions.map((cond, condIndex) => (
+                        {/* CORREÇÃO: Verificação de segurança antes do map */}
+                        {Array.isArray(rule.conditions) && rule.conditions.map((cond, condIndex) => (
                           <div key={condIndex} className="p-3 border rounded-md bg-gray-50 space-y-2">
                             <div className="flex justify-end"><Button onClick={() => { const newRules = [...rules]; newRules[ruleIndex].conditions.splice(condIndex, 1); setRules(newRules); }} variant="ghost" size="icon" className="h-6 w-6"><Trash2 className="h-3 w-3 text-gray-500" /></Button></div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div><Label>O cartão (Pai)</Label><Select value={cond.parent_card_id} onValueChange={(v) => { const newRules = [...rules]; newRules[ruleIndex].conditions[condIndex].parent_card_id = v; setRules(newRules); }}><SelectTrigger><SelectValue placeholder="Selecione o Cartão Pai" /></SelectTrigger><SelectContent>{cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-                              <div><Label>Tiver um dos valores (um por linha)</Label><textarea value={cond.parent_option_values.join('\n')} placeholder="Valor A&#10;Valor B" className="w-full p-2 border rounded-md min-h-[60px]" onChange={(e) => { const newRules = [...rules]; newRules[ruleIndex].conditions[condIndex].parent_option_values = e.target.value.split('\n').map(v => v.trim()).filter(Boolean); setRules(newRules); }} /></div>
+                              <div><Label>O cartão (Pai)</Label><Select value={cond.parent_card_id} onValueChange={(v) => { const newRules = [...rules]; newRules[ruleIndex].conditions[condIndex].parent_card_id = v; setRules(newRules); }}><SelectTrigger><SelectValue placeholder="Selecione o Cartão Pai" /></SelectTrigger><SelectContent>{Array.isArray(cards) && cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+                              <div><Label>Tiver um dos valores (um por linha)</Label><textarea value={Array.isArray(cond.parent_option_values) ? cond.parent_option_values.join('\n') : ''} placeholder="Valor A&#10;Valor B" className="w-full p-2 border rounded-md min-h-[60px]" onChange={(e) => { const newRules = [...rules]; newRules[ruleIndex].conditions[condIndex].parent_option_values = e.target.value.split('\n').map(v => v.trim()).filter(Boolean); setRules(newRules); }} /></div>
                             </div>
                           </div>
                         ))}
@@ -320,8 +329,8 @@ export default function EngineeringApp( ) {
                       </div>
                       <div className="space-y-2 mt-4 p-4 border rounded-md bg-white">
                         <Label className="font-bold text-lg">ENTÃO:</Label>
-                        <div><Label>O cartão (Filho)</Label><Select value={rule.child_card_id} onValueChange={(v) => { const newRules = [...rules]; newRules[ruleIndex].child_card_id = v; setRules(newRules); }}><SelectTrigger><SelectValue placeholder="Selecione o Cartão Filho" /></SelectTrigger><SelectContent>{cards.filter(c => c.type === 'dropdown').map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-                        {childCard && <div className="mt-2"><Label>Só poderá ter os valores:</Label><div className="p-4 border rounded-md bg-gray-50 grid grid-cols-2 md:grid-cols-4 gap-4 max-h-48 overflow-y-auto">{childCard.options.map((opt, optIndex) => <div key={optIndex} className="flex items-center space-x-2"><Checkbox id={`${ruleIndex}-${optIndex}`} checked={rule.child_options.includes(opt)} onCheckedChange={(checked) => { const newOptions = checked ? [...rule.child_options, opt] : rule.child_options.filter(o => o !== opt); setRules(rules.map((r, i) => i === ruleIndex ? { ...r, child_options: newOptions } : r)); }} /><label htmlFor={`${ruleIndex}-${optIndex}`} className="text-sm font-medium leading-none">{opt}</label></div>)}</div></div>}
+                        <div><Label>O cartão (Filho)</Label><Select value={rule.child_card_id} onValueChange={(v) => { const newRules = [...rules]; newRules[ruleIndex].child_card_id = v; setRules(newRules); }}><SelectTrigger><SelectValue placeholder="Selecione o Cartão Filho" /></SelectTrigger><SelectContent>{Array.isArray(cards) && cards.filter(c => c.type === 'dropdown').map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+                        {childCard && <div className="mt-2"><Label>Só poderá ter os valores:</Label><div className="p-4 border rounded-md bg-gray-50 grid grid-cols-2 md:grid-cols-4 gap-4 max-h-48 overflow-y-auto">{Array.isArray(childCard.options) && childCard.options.map((opt, optIndex) => <div key={optIndex} className="flex items-center space-x-2"><Checkbox id={`${ruleIndex}-${optIndex}`} checked={Array.isArray(rule.child_options) && rule.child_options.includes(opt)} onCheckedChange={(checked) => { const newOptions = checked ? [...(rule.child_options || []), opt] : (rule.child_options || []).filter(o => o !== opt); setRules(rules.map((r, i) => i === ruleIndex ? { ...r, child_options: newOptions } : r)); }} /><label htmlFor={`${ruleIndex}-${optIndex}`} className="text-sm font-medium leading-none">{opt}</label></div>)}</div></div>}
                       </div>
                     </Card>
                   )
@@ -351,19 +360,20 @@ export default function EngineeringApp( ) {
           <TabsContent value="release" className="space-y-6 pt-4">
             <Card><CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4"><div><Label>Número da OS</Label><Input value={currentOS} onChange={(e) => setCurrentOS(e.target.value)} /></div><div><Label>Responsável</Label><Input value={currentResponsible} onChange={(e) => setCurrentResponsible(e.target.value)} /></div></CardContent></Card>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {cards.map((card) => {
-                const applicableRules = rules.filter(r => r.child_card_id === card.id);
-                let options = card.options;
+              {/* CORREÇÃO: Verificação de segurança antes do map */}
+              {Array.isArray(cards) && cards.map((card) => {
+                const applicableRules = Array.isArray(rules) ? rules.filter(r => r.child_card_id === card.id) : [];
+                let options = Array.isArray(card.options) ? card.options : [];
                 let isDisabled = false;
                 if (applicableRules.length > 0) {
                   let ruleApplied = false;
                   for (const rule of applicableRules) {
-                    const allConditionsMet = rule.conditions.every(cond => {
+                    const allConditionsMet = Array.isArray(rule.conditions) && rule.conditions.every(cond => {
                       const parentValue = releaseData[cond.parent_card_id];
-                      return parentValue && cond.parent_option_values.includes(parentValue);
+                      return parentValue && Array.isArray(cond.parent_option_values) && cond.parent_option_values.includes(parentValue);
                     });
                     if (allConditionsMet) {
-                      options = rule.child_options;
+                      options = Array.isArray(rule.child_options) ? rule.child_options : [];
                       ruleApplied = true;
                       break;
                     }
@@ -379,30 +389,33 @@ export default function EngineeringApp( ) {
                     <CardHeader><CardTitle className="text-lg">{card.name}</CardTitle></CardHeader>
                     <CardContent>
                       {isDropdown ? (
-                        <Select value={releaseData[card.id] || ''} onValueChange={(v) => {
-                          const newReleaseData = { ...releaseData, [card.id]: v === '--' ? '' : v };
-                          rules.filter(r => r.conditions.some(c => c.parent_card_id === card.id))
-                               .forEach(r => { newReleaseData[r.child_card_id] = ''; });
-                          setReleaseData(newReleaseData);
-                        }} disabled={isDisabled}>
-                          <SelectTrigger><SelectValue placeholder={isDisabled ? "Bloqueado" : "Selecione..."} /></SelectTrigger>
+                        <Select 
+                          value={releaseData[card.id] || ''} 
+                          onValueChange={(value) => setReleaseData(prev => ({ ...prev, [card.id]: value }))}
+                          disabled={isDisabled}
+                        >
+                          <SelectTrigger><SelectValue placeholder={isDisabled ? "Aguardando condições" : "Selecione uma opção"} /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="--">Selecione...</SelectItem>
-                            {options.map((opt, i) => <SelectItem key={i} value={opt}>{opt}</SelectItem>)}
+                            {options.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       ) : (
-                        <Input value={releaseData[card.id] || ''} onChange={(e) => setReleaseData({ ...releaseData, [card.id]: e.target.value })} disabled={isDisabled} />
+                        <Input 
+                          value={releaseData[card.id] || ''} 
+                          onChange={(e) => setReleaseData(prev => ({ ...prev, [card.id]: e.target.value }))}
+                          disabled={isDisabled}
+                          placeholder={isDisabled ? "Aguardando condições" : "Digite o valor"}
+                        />
                       )}
                     </CardContent>
                   </Card>
-                )
+                );
               })}
             </div>
             <div className="flex justify-center"><Button onClick={handleSaveRelease} disabled={isSaving} className="px-8 py-3 text-lg">{isSaving ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Salvando...</> : <><Save className="mr-2 h-5 w-5" />Salvar Liberação</>}</Button></div>
           </TabsContent>
           
-          {/* ABA DE LIBERADOS COM A CORREÇÃO */}
+          {/* ABA DE LIBERADOS COM A CORREÇÃO PRINCIPAL */}
           <TabsContent value="released" className="space-y-6 pt-4">
             <div className="flex justify-between items-center"><h2 className="text-2xl font-bold">Códigos Liberados</h2><Button onClick={() => setShowChecklistModal(true)}><FileText className="mr-2 h-4 w-4" />Gerar Checklist</Button></div>
             <Card>
@@ -413,11 +426,13 @@ export default function EngineeringApp( ) {
                       <th className="text-left p-4 font-semibold">OS</th>
                       <th className="text-left p-4 font-semibold">Responsável</th>
                       <th className="text-left p-4 font-semibold">Data</th>
+                      {/* CORREÇÃO PRINCIPAL: Verificação de segurança antes do map */}
                       {Array.isArray(cards) && cards.map(c => <th key={c.id} className="text-left p-4 font-semibold">{c.name}</th>)}
                     </tr>
                   </thead>
                   <tbody>
-                    {[...new Set(releases.map(r => r.osNumber))].map(os => {
+                    {/* CORREÇÃO: Verificação de segurança antes do map */}
+                    {Array.isArray(releases) && [...new Set(releases.map(r => r.osNumber))].map(os => {
                       const osReleases = releases.filter(r => r.osNumber === os);
                       const first = osReleases[0];
                       return (
@@ -425,6 +440,7 @@ export default function EngineeringApp( ) {
                           <td className="p-4 font-medium">{os}</td>
                           <td className="p-4">{first?.responsible}</td>
                           <td className="p-4">{first ? new Date(first.releaseDate).toLocaleDateString('pt-BR') : ''}</td>
+                          {/* CORREÇÃO: Verificação de segurança antes do map */}
                           {Array.isArray(cards) && cards.map(c => <td key={c.id} className="p-4">{osReleases.find(r => r.cardId === c.id)?.value || '-'}</td>)}
                         </tr>
                       )
@@ -444,9 +460,10 @@ export default function EngineeringApp( ) {
                 <div className="space-y-4 pt-4 border-t">
                   <div className="flex justify-between items-center"><h3 className="text-lg font-semibold">Checklist para OS: {checklistOS}</h3><Button variant="outline" size="sm" onClick={copyChecklistToClipboard}><Copy className="mr-2 h-4 w-4" />Copiar</Button></div>
                   <div className="border rounded-lg max-h-96 overflow-y-auto">
-                    {checklistData.filter(item => item.isHeader).length > 0 && <div className="p-4 bg-blue-50 border-b"><h4 className="font-bold text-blue-700 mb-2">ITENS PRINCIPAIS</h4><div className="space-y-1">{checklistData.filter(item => item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span>
+                    {/* CORREÇÃO: Verificação de segurança antes do filter e map */}
+                    {Array.isArray(checklistData) && checklistData.filter(item => item.isHeader).length > 0 && <div className="p-4 bg-blue-50 border-b"><h4 className="font-bold text-blue-700 mb-2">ITENS PRINCIPAIS</h4><div className="space-y-1">{checklistData.filter(item => item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span>
 <span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}</div></div>}
-                    {checklistData.filter(item => !item.isHeader).length > 0 && <div className="p-4"><h4 className="font-bold text-gray-700 mb-2">DEMAIS ITENS</h4><div className="space-y-1">{checklistData.filter(item => !item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span><span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}</div></div>}
+                    {Array.isArray(checklistData) && checklistData.filter(item => !item.isHeader).length > 0 && <div className="p-4"><h4 className="font-bold text-gray-700 mb-2">DEMAIS ITENS</h4><div className="space-y-1">{checklistData.filter(item => !item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span><span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}</div></div>}
                   </div>
                 </div>
               )}
