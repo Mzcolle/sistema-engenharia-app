@@ -1,6 +1,6 @@
 "use client";
 
-//versão final com todas as correções - v7 (Regras Complexas)
+//versão final com todas as correções - v8 (Correção do 'map')
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Settings, Plus, Trash2, Save, Loader2, FileText, Copy, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Layers } from "lucide-react";
 
 // ==================================
-// INTERFACES E ESTADOS (ESTRUTURA DE REGRAS ATUALIZADA)
+// INTERFACES E ESTADOS
 // ==================================
 interface CardConfig {
   id: string;
@@ -35,17 +35,16 @@ interface Release {
   additionalNumber?: number;
 }
 
-// NOVA ESTRUTURA DE REGRAS
 interface Condition {
   parent_card_id: string;
-  parent_option_values: string[]; // Array para a lógica OU
+  parent_option_values: string[];
 }
 
 interface Rule {
   id?: number;
   child_card_id: string;
   child_options: string[];
-  conditions: Condition[]; // Array para a lógica E
+  conditions: Condition[];
 }
 
 interface ChecklistItem {
@@ -129,21 +128,13 @@ export default function EngineeringApp( ) {
   const handleSaveRules = async () => {
     setIsSaving(true);
     try {
-      // Validação: verifica se todas as regras e condições estão preenchidas
       for (const rule of rules) {
-        if (!rule.child_card_id || rule.child_options.length === 0) {
-          throw new Error("Toda regra deve ter um Cartão Filho e ao menos uma Opção de Filho selecionada.");
-        }
-        if (rule.conditions.length === 0) {
-          throw new Error("Toda regra deve ter ao menos uma condição (Pai).");
-        }
+        if (!rule.child_card_id || rule.child_options.length === 0) throw new Error("Toda regra deve ter um Cartão Filho e ao menos uma Opção de Filho selecionada.");
+        if (rule.conditions.length === 0) throw new Error("Toda regra deve ter ao menos uma condição (Pai).");
         for (const cond of rule.conditions) {
-          if (!cond.parent_card_id || cond.parent_option_values.length === 0) {
-            throw new Error("Toda condição deve ter um Cartão Pai e ao menos um Valor do Pai.");
-          }
+          if (!cond.parent_card_id || cond.parent_option_values.length === 0) throw new Error("Toda condição deve ter um Cartão Pai e ao menos um Valor do Pai.");
         }
       }
-
       const response = await fetch(`${API_URL}/rules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -162,7 +153,6 @@ export default function EngineeringApp( ) {
   const handleSaveRelease = async () => {
     if (!currentOS || !currentResponsible) return alert('Preencha o número da OS e o responsável!');
     if (!Object.values(releaseData).some(v => v.trim() !== '')) return alert('Preencha pelo menos um campo!');
-
     setIsSaving(true);
     const releaseDate = new Date().toISOString();
     const payload = Object.entries(releaseData)
@@ -171,7 +161,6 @@ export default function EngineeringApp( ) {
         const card = cards.find(c => c.id === cardId);
         return { osNumber: currentOS, cardId, cardName: card?.name || 'N/A', value, responsible: currentResponsible, releaseDate, type: 'initial' };
       });
-
     try {
       const response = await fetch(`${API_URL}/releases`, {
         method: 'POST',
@@ -309,8 +298,6 @@ export default function EngineeringApp( ) {
                 ))}
                 <DialogFooter><Button type="button" onClick={handleSaveCards} disabled={isSaving}>{isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando...</> : <><Save className="mr-2 h-4 w-4" />Salvar Cartões</>}</Button></DialogFooter>
               </TabsContent>
-              
-              {/* NOVA INTERFACE DE REGRAS COMPLEXAS */}
               <TabsContent value="rules" className="space-y-6 pt-4">
                 <div className="flex justify-between items-center"><h3 className="text-lg font-semibold">Regras Condicionais</h3><Button onClick={() => setRules([...rules, { child_card_id: '', child_options: [], conditions: [{ parent_card_id: '', parent_option_values: [] }] }])}><Plus className="mr-2 h-4 w-4" />Adicionar Nova Regra</Button></div>
                 {rules.map((rule, ruleIndex) => {
@@ -318,8 +305,6 @@ export default function EngineeringApp( ) {
                   return (
                     <Card key={ruleIndex} className="p-4 bg-gray-50 border-2 border-gray-200">
                       <div className="flex justify-end mb-2"><Button onClick={() => setRules(rules.filter((_, i) => i !== ruleIndex))} variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-red-500" /></Button></div>
-                      
-                      {/* CONDIÇÕES (LÓGICA E) */}
                       <div className="space-y-4 p-4 border rounded-md bg-white">
                         <Label className="font-bold text-lg">SE (todas as condições forem verdadeiras):</Label>
                         {rule.conditions.map((cond, condIndex) => (
@@ -333,8 +318,6 @@ export default function EngineeringApp( ) {
                         ))}
                         <Button variant="outline" size="sm" onClick={() => { const newRules = [...rules]; newRules[ruleIndex].conditions.push({ parent_card_id: '', parent_option_values: [] }); setRules(newRules); }}><Plus className="mr-2 h-4 w-4" />Adicionar Condição (E)</Button>
                       </div>
-
-                      {/* AÇÃO (LÓGICA ENTÃO) */}
                       <div className="space-y-2 mt-4 p-4 border rounded-md bg-white">
                         <Label className="font-bold text-lg">ENTÃO:</Label>
                         <div><Label>O cartão (Filho)</Label><Select value={rule.child_card_id} onValueChange={(v) => { const newRules = [...rules]; newRules[ruleIndex].child_card_id = v; setRules(newRules); }}><SelectTrigger><SelectValue placeholder="Selecione o Cartão Filho" /></SelectTrigger><SelectContent>{cards.filter(c => c.type === 'dropdown').map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
@@ -348,7 +331,6 @@ export default function EngineeringApp( ) {
             </Tabs>
           </DialogContent>
         </Dialog>
-
         <Dialog open={bulkAddState.open} onOpenChange={(open) => !open && setBulkAddState({ open: false, cardId: null, text: '' })}>
           <DialogContent>
             <DialogHeader><DialogTitle>Adicionar Opções em Massa</DialogTitle></DialogHeader>
@@ -370,35 +352,27 @@ export default function EngineeringApp( ) {
             <Card><CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4"><div><Label>Número da OS</Label><Input value={currentOS} onChange={(e) => setCurrentOS(e.target.value)} /></div><div><Label>Responsável</Label><Input value={currentResponsible} onChange={(e) => setCurrentResponsible(e.target.value)} /></div></CardContent></Card>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {cards.map((card) => {
-                // LÓGICA DE APLICAÇÃO DE REGRAS COMPLEXAS
                 const applicableRules = rules.filter(r => r.child_card_id === card.id);
                 let options = card.options;
                 let isDisabled = false;
-
                 if (applicableRules.length > 0) {
                   let ruleApplied = false;
                   for (const rule of applicableRules) {
-                    // Verifica se TODAS as condições (E) da regra são verdadeiras
                     const allConditionsMet = rule.conditions.every(cond => {
                       const parentValue = releaseData[cond.parent_card_id];
-                      // Verifica se o valor do pai está DENTRO da lista de valores (OU)
                       return parentValue && cond.parent_option_values.includes(parentValue);
                     });
-
                     if (allConditionsMet) {
                       options = rule.child_options;
                       ruleApplied = true;
-                      break; // Aplica a primeira regra que corresponder
+                      break;
                     }
                   }
-                  
-                  // Se nenhuma regra foi aplicada, mas existe uma regra para este filho, bloqueia o cartão
                   if (!ruleApplied) {
                     isDisabled = true;
                     options = [];
                   }
                 }
-
                 const isDropdown = card.type === 'dropdown';
                 return (
                   <Card key={card.id} className={isDisabled ? 'bg-gray-200 opacity-50' : ''}>
@@ -407,7 +381,6 @@ export default function EngineeringApp( ) {
                       {isDropdown ? (
                         <Select value={releaseData[card.id] || ''} onValueChange={(v) => {
                           const newReleaseData = { ...releaseData, [card.id]: v === '--' ? '' : v };
-                          // Limpa os filhos quando o pai muda
                           rules.filter(r => r.conditions.some(c => c.parent_card_id === card.id))
                                .forEach(r => { newReleaseData[r.child_card_id] = ''; });
                           setReleaseData(newReleaseData);
@@ -430,8 +403,36 @@ export default function EngineeringApp( ) {
           </TabsContent>
           <TabsContent value="released" className="space-y-6 pt-4">
             <div className="flex justify-between items-center"><h2 className="text-2xl font-bold">Códigos Liberados</h2><Button onClick={() => setShowChecklistModal(true)}><FileText className="mr-2 h-4 w-4" />Gerar Checklist</Button></div>
-            <Card><CardContent className="p-4 overflow-x-auto"><table className="w-full"><thead><tr className="border-b bg-gray-50"><th className="text-left p-4 font-semibold">OS</th><th className="text-left p-4 font-semibold">Responsável</th><th className="text-left p-4 font-semibold">Data</th>{cards.map(c => <th key={c.id} className="text-left p-4 font-semibold">{c.name}</th>)}</tr></thead><tbody>{[...new Set(releases.map(r => r.osNumber))].map(os => { const osReleases = releases.
-filter(r => r.osNumber === os); const first = osReleases[0]; return <tr key={os} className="border-b hover:bg-gray-50"><td className="p-4 font-medium">{os}</td><td className="p-4">{first?.responsible}</td><td className="p-4">{first ? new Date(first.releaseDate).toLocaleDateString('pt-BR') : ''}</td>{cards.map(c => <td key={c.id} className="p-4">{osReleases.find(r => r.cardId === c.id)?.value || '-'}</td>)}</tr> })}</tbody></table></CardContent></Card>
+            <Card>
+              <CardContent className="p-4 overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b bg-gray-50">
+                      <th className="text-left p-4 font-semibold">OS</th>
+                      <th className="text-left p-4 font-semibold">Responsável</th>
+                      <th className="text-left p-4 font-semibold">Data</th>
+                      {/* CORREÇÃO AQUI */}
+                      {Array.isArray(cards) && cards.map(c => <th key={c.id} className="text-left p-4 font-semibold">{c.name}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...new Set(releases.map(r => r.osNumber))].map(os => {
+                      const osReleases = releases.filter(r => r.osNumber === os);
+                      const first = osReleases[0];
+                      return (
+                        <tr key={os} className="border-b hover:bg-gray-50">
+                          <td className="p-4 font-medium">{os}</td>
+                          <td className="p-4">{first?.responsible}</td>
+                          <td className="p-4">{first ? new Date(first.releaseDate).toLocaleDateString('pt-BR') : ''}</td>
+                          {/* CORREÇÃO AQUI */}
+                          {Array.isArray(cards) && cards.map(c => <td key={c.id} className="p-4">{osReleases.find(r => r.cardId === c.id)?.value || '-'}</td>)}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
         <Dialog open={showChecklistModal} onOpenChange={setShowChecklistModal}>
@@ -455,3 +456,4 @@ filter(r => r.osNumber === os); const first = osReleases[0]; return <tr key={os}
     </div>
   );
 }
+
