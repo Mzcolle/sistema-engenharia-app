@@ -11,6 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Checkbox } from "@/components/ui/checkbox";
 import { Settings, Plus, Trash2, Save, FileText, Copy, Search, Loader2 } from "lucide-react";
 
+// ==================================
+// NOVAS INTERFACES E ESTADOS
+// ==================================
+
 // Tipos
 interface CardConfig {
   id: string;
@@ -32,8 +36,18 @@ interface Release {
   additionalNumber?: number;
 }
 
+// Nova interface para as Regras
+interface Rule {
+  id?: number; // O ID virá do banco de dados
+  parent_card_id: string;
+  parent_option_value: string;
+  child_card_id: string;
+  options: string[];
+}
+
+
 // URL da API
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:10000/api";
 
 export default function EngineeringApp( ) {
   const [currentView, setCurrentView] = useState<'home' | 'release' | 'released'>('home');
@@ -50,21 +64,33 @@ export default function EngineeringApp( ) {
   const [currentResponsible, setCurrentResponsible] = useState('');
   const [releaseData, setReleaseData] = useState<Record<string, string>>({});
 
-  // Função para buscar todos os dados do servidor
+  // Novo estado para armazenar as regras
+  const [rules, setRules] = useState<Rule[]>([]);
+
+  // ==================================
+  // LÓGICA DE DADOS ATUALIZADA
+  // ==================================
+
+  // Função para buscar todos os dados do servidor (incluindo as regras)
   const fetchAllData = async () => {
     setIsLoading(true);
     try {
-      const [cardsResponse, releasesResponse] = await Promise.all([
+      const [cardsResponse, releasesResponse, rulesResponse] = await Promise.all([
         fetch(`${API_URL}/cards`),
-        fetch(`${API_URL}/releases`)
+        fetch(`${API_URL}/releases`),
+        fetch(`${API_URL}/rules`) // Busca as novas regras
       ]);
-      if (!cardsResponse.ok || !releasesResponse.ok) {
+      if (!cardsResponse.ok || !releasesResponse.ok || !rulesResponse.ok) {
         throw new Error('Falha ao buscar dados do servidor.');
       }
       const cardsData = await cardsResponse.json();
       const releasesData = await releasesResponse.json();
+      const rulesData = await rulesResponse.json(); // Processa a resposta das regras
+
       setCards(cardsData || []);
       setReleases(releasesData || []);
+      setRules(rulesData || []); // Salva as regras no estado
+
     } catch (error) {
       console.error("Falha ao buscar dados iniciais:", error);
       alert("Não foi possível carregar os dados do servidor. Tente recarregar a página.");
@@ -78,7 +104,7 @@ export default function EngineeringApp( ) {
     fetchAllData();
   }, []);
 
-  // Função para salvar os cartões (configuração)
+  // Função para salvar os cartões (configuração) - Sem alterações
   const handleSaveCards = async () => {
     setIsSaving(true);
     try {
@@ -94,7 +120,7 @@ export default function EngineeringApp( ) {
       }
       
       const savedCards = await response.json();
-      setCards(savedCards); // Atualiza o estado com os dados do servidor
+      setCards(savedCards);
       alert('Configurações salvas com sucesso!');
       setIsAdminAuthenticated(false);
 
@@ -106,7 +132,7 @@ export default function EngineeringApp( ) {
     }
   };
 
-  // Função para salvar uma nova liberação
+  // Função para salvar uma nova liberação - Sem alterações
   const handleSaveRelease = async () => {
     if (!currentOS || !currentResponsible) {
       alert('Preencha o número da OS e o responsável!');
@@ -150,7 +176,7 @@ export default function EngineeringApp( ) {
         throw new Error('Falha ao salvar a liberação no servidor.');
       }
       
-      await fetchAllData(); // Re-busca todos os dados para ter a lista mais atual
+      await fetchAllData();
       alert('Liberação salva com sucesso!');
       setCurrentOS('');
       setCurrentResponsible('');
@@ -179,6 +205,10 @@ export default function EngineeringApp( ) {
   const addCard = () => setCards([...cards, { id: `temp-${Date.now()}`, name: '', type: 'text', options: [], includeInHeader: false }]);
   const updateCard = (id: string, field: keyof CardConfig, value: any) => setCards(cards.map(card => card.id === id ? { ...card, [field]: value } : card));
   const removeCard = (id: string) => setCards(cards.filter(card => card.id !== id));
+
+  // ==================================
+  // RENDERIZAÇÃO DOS COMPONENTES
+  // ==================================
 
   // Tela de Loading
   if (isLoading) {
@@ -216,33 +246,135 @@ export default function EngineeringApp( ) {
           </DialogContent>
         </Dialog>
 
-        {/* Modal do Painel Administrativo */}
+        {/* 
+          ============================================================
+          NOVO MODAL DO PAINEL ADMINISTRATIVO COM ABAS PARA REGRAS
+          ============================================================
+        */}
         <Dialog open={isAdminAuthenticated} onOpenChange={setIsAdminAuthenticated}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Painel Administrativo</DialogTitle></DialogHeader>
-            <div className="space-y-6 py-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold">Configurar Cartões</h3>
-                <Button onClick={addCard}><Plus className="mr-2 h-4 w-4" />Adicionar Cartão</Button>
-              </div>
-              {cards.map((card) => (
-                <Card key={card.id} className="p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1">
-                      <Label>Nome do Cartão</Label>
-                      <Input value={card.name} onChange={(e) => updateCard(card.id, 'name', e.target.value)} />
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Painel Administrativo</DialogTitle>
+            </DialogHeader>
+            
+            <Tabs defaultValue="cards" className="py-4">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="cards">Configurar Cartões</TabsTrigger>
+                <TabsTrigger value="rules">Gerenciar Regras</TabsTrigger>
+              </TabsList>
+
+              {/* Aba de Configurar Cartões */}
+              <TabsContent value="cards" className="space-y-6 pt-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold">Configurar Cartões</h3>
+                  <Button onClick={addCard}><Plus className="mr-2 h-4 w-4" />Adicionar Cartão</Button>
+                </div>
+                {cards.map((card) => (
+                  <Card key={card.id} className="p-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <Label>Nome do Cartão</Label>
+                        <Input value={card.name} onChange={(e) => updateCard(card.id, 'name', e.target.value)} />
+                      </div>
+                      <Button onClick={() => removeCard(card.id)} variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button>
                     </div>
-                    <Button onClick={() => removeCard(card.id)} variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button>
-                  </div>
-                </Card>
-              ))}
-            </div>
-            <DialogFooter>
-              <Button type="button" onClick={handleSaveCards} disabled={isSaving}>
-                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {isSaving ? 'Salvando...' : 'Salvar Configurações'}
-              </Button>
-            </DialogFooter>
+                  </Card>
+                ))}
+                <DialogFooter>
+                  <Button type="button" onClick={handleSaveCards} disabled={isSaving}>
+                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    {isSaving ? 'Salvando...' : 'Salvar Cartões'}
+                  </Button>
+                </DialogFooter>
+              </TabsContent>
+
+              {/* NOVA Aba de Gerenciar Regras */}
+              <TabsContent value="rules" className="space-y-6 pt-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold">Regras Condicionais</h3>
+                  <Button onClick={() => setRules([...rules, { parent_card_id: '', parent_option_value: '', child_card_id: '', options: [] }])}>
+                    <Plus className="mr-2 h-4 w-4" />Adicionar Nova Regra
+                  </Button>
+                </div>
+
+                {rules.map((rule, index) => (
+                  <Card key={index} className="p-4 bg-gray-50">
+                    <div className="flex justify-end mb-2">
+                        <Button onClick={() => setRules(rules.filter((_, i) => i !== index))} variant="ghost" size="icon">
+                            <Trash2 className="h-4 w-4 text-red-500"/>
+                        </Button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <Label>QUANDO no cartão (Pai)</Label>
+                        <Select value={rule.parent_card_id} onValueChange={(value) => {
+                            const newRules = [...rules];
+                            newRules[index].parent_card_id = value;
+                            setRules(newRules);
+                        }}>
+                          <SelectTrigger><SelectValue placeholder="Selecione o cartão pai..." /></SelectTrigger>
+                          <SelectContent>{cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>o valor for</Label>
+                        <Input value={rule.parent_option_value} placeholder="Digite o valor exato" onChange={(e) => {
+                            const newRules = [...rules];
+                            newRules[index].parent_option_value = e.target.value;
+                            setRules(newRules);
+                        }}/>
+                      </div>
+                      <div>
+                        <Label>ENTÃO o cartão (Filho)</Label>
+                        <Select value={rule.child_card_id} onValueChange={(value) => {
+                            const newRules = [...rules];
+                            newRules[index].child_card_id = value;
+                            setRules(newRules);
+                        }}>
+                          <SelectTrigger><SelectValue placeholder="Selecione o cartão filho..." /></SelectTrigger>
+                          <SelectContent>{cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                        <Label>só poderá ter os valores (um por linha)</Label>
+                        <textarea
+                            value={rule.options.join('\n')}
+                            placeholder={"Opção A\nOpção B\nOpção C"}
+                            className="w-full p-2 border rounded-md min-h-[80px] bg-white"
+                            onChange={(e) => {
+                                const newRules = [...rules];
+                                newRules[index].options = e.target.value.split('\n').filter(opt => opt.trim() !== '');
+                                setRules(newRules);
+                            }}
+                        />
+                    </div>
+                  </Card>
+                ))}
+                <DialogFooter>
+                  <Button type="button" onClick={async () => {
+                      setIsSaving(true);
+                      try {
+                          const response = await fetch(`${API_URL}/rules`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify(rules)
+                          });
+                          if (!response.ok) throw new Error("Falha ao salvar regras.");
+                          alert("Regras salvas com sucesso!");
+                          await fetchAllData(); // Re-busca os dados para garantir consistência
+                      } catch (error) {
+                          alert("Erro ao salvar regras.");
+                      } finally {
+                          setIsSaving(false);
+                      }
+                  }} disabled={isSaving}>
+                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    {isSaving ? 'Salvando...' : 'Salvar Todas as Regras'}
+                  </Button>
+                </DialogFooter>
+              </TabsContent>
+            </Tabs>
           </DialogContent>
         </Dialog>
       </div>
@@ -324,8 +456,8 @@ export default function EngineeringApp( ) {
                           return (
                             <tr key={osNumber} className="border-b hover:bg-gray-50">
                               <td className="p-4 font-medium">{osNumber}</td>
-                              <td className="p-4">{firstRelease.responsible}</td>
-                              <td className="p-4">{new Date(firstRelease.releaseDate).toLocaleDateString('pt-BR')}</td>
+                              <td className="p-4">{firstRelease?.responsible}</td>
+                              <td className="p-4">{firstRelease ? new Date(firstRelease.releaseDate).toLocaleDateString('pt-BR') : ''}</td>
                               {cards.map(card => {
                                 const release = osReleases.find(r => r.cardId === card.id);
                                 return <td key={card.id} className="p-4">{release ? release.value : '-'}</td>
