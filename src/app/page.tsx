@@ -1,6 +1,6 @@
 "use client";
 
-//versão final com todas as correções - v4
+//versão final com todas as correções - v5
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Settings, Plus, Trash2, Save, Loader2, FileText, Copy, ArrowUp, ArrowDown } from "lucide-react";
+import { Settings, Plus, Trash2, Save, Loader2, FileText, Copy, ArrowUp, ArrowDown, ChevronDown, ChevronUp } from "lucide-react";
 
 // ==================================
 // INTERFACES E ESTADOS
@@ -69,6 +69,9 @@ export default function EngineeringApp( ) {
   const [showChecklistModal, setShowChecklistModal] = useState(false);
   const [checklistOS, setChecklistOS] = useState('');
   const [checklistData, setChecklistData] = useState<ChecklistItem[]>([]);
+  
+  // NOVO ESTADO: Para controlar a visibilidade das opções dos cartões no admin
+  const [expandedOptions, setExpandedOptions] = useState<Record<string, boolean>>({});
 
   // ==================================
   // LÓGICA DE DADOS
@@ -233,8 +236,6 @@ export default function EngineeringApp( ) {
   const addOptionToCard = (cardId: string) => setCards(cards.map(c => c.id === cardId ? { ...c, options: [...c.options, ''] } : c));
   const updateCardOption = (cardId: string, optIndex: number, value: string) => setCards(cards.map(c => c.id === cardId ? { ...c, options: c.options.map((opt, i) => i === optIndex ? value : opt) } : c));
   const removeCardOption = (cardId: string, optIndex: number) => setCards(cards.map(c => c.id === cardId ? { ...c, options: c.options.filter((_, i) => i !== optIndex) } : c));
-  
-  // NOVA FUNÇÃO PARA REORDENAR OS CARTÕES
   const moveCard = (index: number, direction: 'up' | 'down') => {
     const newCards = [...cards];
     const cardToMove = newCards[index];
@@ -243,6 +244,10 @@ export default function EngineeringApp( ) {
     newCards[index] = newCards[swapIndex];
     newCards[swapIndex] = cardToMove;
     setCards(newCards);
+  };
+  // NOVA FUNÇÃO: Para alternar a visibilidade das opções
+  const toggleOptionsVisibility = (cardId: string) => {
+    setExpandedOptions(prev => ({ ...prev, [cardId]: !prev[cardId] }));
   };
 
   // ==================================
@@ -274,14 +279,31 @@ export default function EngineeringApp( ) {
                   <Card key={card.id} className="p-4">
                     <div className="space-y-4">
                       <div className="flex items-center gap-4">
-                        {/* BOTÕES DE REORDENAÇÃO */}
                         <div className="flex flex-col gap-1"><Button onClick={() => moveCard(index, 'up')} disabled={index === 0} size="icon" variant="ghost"><ArrowUp className="h-4 w-4" /></Button><Button onClick={() => moveCard(index, 'down')} disabled={index === cards.length - 1} size="icon" variant="ghost"><ArrowDown className="h-4 w-4" /></Button></div>
                         <div className="flex-1"><Label>Nome do Cartão</Label><Input value={card.name} onChange={(e) => updateCard(card.id, 'name', e.target.value)} /></div>
                         <div><Label>Tipo</Label><Select value={card.type} onValueChange={(v: 'text' | 'dropdown') => updateCard(card.id, 'type', v)}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="text">Texto</SelectItem><SelectItem value="dropdown">Lista Suspensa</SelectItem></SelectContent></Select></div>
                         <div className="flex items-center space-x-2 pt-6"><Checkbox id={`header-${card.id}`} checked={card.includeInHeader} onCheckedChange={(checked) => updateCard(card.id, 'includeInHeader', !!checked)} /><Label htmlFor={`header-${card.id}`} className="text-sm font-medium">No cabeçalho?</Label></div>
                         <Button onClick={() => removeCard(card.id)} variant="destructive" size="icon" className="self-end"><Trash2 className="h-4 w-4" /></Button>
                       </div>
-                      {card.type === 'dropdown' && <div className="space-y-2 pt-4 border-t"><div className="flex justify-between items-center mb-2"><Label>Opções da Lista</Label><Button onClick={() => addOptionToCard(card.id)} size="sm" variant="outline"><Plus className="mr-1 h-3 w-3" />Opção</Button></div>{card.options.map((opt, i) => <div key={i} className="flex gap-2"><Input value={opt} onChange={(e) => updateCardOption(card.id, i, e.target.value)} /><Button onClick={() => removeCardOption(card.id, i)} variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button></div>)}</div>}
+                      {card.type === 'dropdown' && (
+                        <div className="space-y-2 pt-4 border-t">
+                          <div className="flex justify-between items-center mb-2">
+                            {/* BOTÃO RETRÁTIL */}
+                            <Button variant="ghost" onClick={() => toggleOptionsVisibility(card.id)} className="flex-grow justify-start px-2">
+                              {expandedOptions[card.id] ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
+                              Opções da Lista ({card.options.length})
+                            </Button>
+                            <Button onClick={() => addOptionToCard(card.id)} size="sm" variant="outline"><Plus className="mr-1 h-3 w-3" />Opção</Button>
+                          </div>
+                          {/* RENDERIZAÇÃO CONDICIONAL DAS OPÇÕES */}
+                          {expandedOptions[card.id] && card.options.map((opt, i) => (
+                            <div key={i} className="flex gap-2 animate-in fade-in-0">
+                              <Input value={opt} onChange={(e) => updateCardOption(card.id, i, e.target.value)} />
+                              <Button onClick={() => removeCardOption(card.id, i)} variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </Card>
                 ))}
