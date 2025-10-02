@@ -1,6 +1,6 @@
 "use client";
 
-//versão final com todas as correções - v12 (CORREÇÃO DE ERROS MAP E REGRAS)
+//versão final com todas as correções - v13 (CORREÇÃO DE ERROS MAP E REGRAS - SELECT MULTIPLE)
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -346,37 +346,17 @@ export default function EngineeringApp( ) {
                                 </div>
                                 <div>
                                   <Label>Valores do Cartão Pai (um por linha)</Label>
-                                  {parentCard?.type === 'dropdown' ? (
-                                    <Select
-                                      multiple
-                                      value={cond.parent_option_values}
-                                      onValueChange={(selectedValues) => {
-                                        const newRules = [...rules];
-                                        newRules[ruleIndex].conditions[condIndex].parent_option_values = selectedValues;
-                                        setRules(newRules);
-                                      }}
-                                      disabled={!parentCard}
-                                    >
-                                      <SelectTrigger><SelectValue placeholder="Selecione os valores" /></SelectTrigger>
-                                      <SelectContent>
-                                        {Array.isArray(parentCard.options) && parentCard.options.map(opt => (
-                                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  ) : (
-                                    <textarea
-                                      value={Array.isArray(cond.parent_option_values) ? cond.parent_option_values.join('\n') : ''}
-                                      placeholder="Valor A\nValor B"
-                                      className="w-full p-2 border rounded-md min-h-[60px]"
-                                      onChange={(e) => {
-                                        const newRules = [...rules];
-                                        newRules[ruleIndex].conditions[condIndex].parent_option_values = e.target.value.split('\n').map(v => v.trim()).filter(Boolean);
-                                        setRules(newRules);
-                                      }}
-                                      disabled={!parentCard}
-                                    />
-                                  )}
+                                  <textarea
+                                    value={Array.isArray(cond.parent_option_values) ? cond.parent_option_values.join('\n') : ''}
+                                    placeholder="Valor A\nValor B\nValor C"
+                                    className="w-full p-2 border rounded-md min-h-[60px]"
+                                    onChange={(e) => {
+                                      const newRules = [...rules];
+                                      newRules[ruleIndex].conditions[condIndex].parent_option_values = e.target.value.split('\n').map(v => v.trim()).filter(Boolean);
+                                      setRules(newRules);
+                                    }}
+                                    disabled={!parentCard}
+                                  />
                                 </div>
                               </div>
                             </div>
