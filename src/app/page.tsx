@@ -1,6 +1,6 @@
 "use client";
 
-//versão final com todas as correções - v5
+//versão final com todas as correções - v6
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Settings, Plus, Trash2, Save, Loader2, FileText, Copy, ArrowUp, ArrowDown, ChevronDown, ChevronUp } from "lucide-react";
+import { Settings, Plus, Trash2, Save, Loader2, FileText, Copy, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Layers } from "lucide-react";
 
 // ==================================
 // INTERFACES E ESTADOS
@@ -69,9 +69,10 @@ export default function EngineeringApp( ) {
   const [showChecklistModal, setShowChecklistModal] = useState(false);
   const [checklistOS, setChecklistOS] = useState('');
   const [checklistData, setChecklistData] = useState<ChecklistItem[]>([]);
-  
-  // NOVO ESTADO: Para controlar a visibilidade das opções dos cartões no admin
   const [expandedOptions, setExpandedOptions] = useState<Record<string, boolean>>({});
+
+  // NOVO ESTADO: Para o modal de adição em massa
+  const [bulkAddState, setBulkAddState] = useState<{ open: boolean; cardId: string | null; text: string }>({ open: false, cardId: null, text: '' });
 
   // ==================================
   // LÓGICA DE DADOS
@@ -150,15 +151,7 @@ export default function EngineeringApp( ) {
       .filter(([, value]) => value.trim() !== '')
       .map(([cardId, value]) => {
         const card = cards.find(c => c.id === cardId);
-        return {
-          osNumber: currentOS,
-          cardId,
-          cardName: card?.name || 'N/A',
-          value,
-          responsible: currentResponsible,
-          releaseDate,
-          type: 'initial'
-        };
+        return { osNumber: currentOS, cardId, cardName: card?.name || 'N/A', value, responsible: currentResponsible, releaseDate, type: 'initial' };
       });
 
     try {
@@ -195,16 +188,9 @@ export default function EngineeringApp( ) {
     if (!checklistOS) return alert('Digite o número da OS!');
     const osReleases = releases.filter(r => r.osNumber === checklistOS);
     if (osReleases.length === 0) return alert('Nenhuma liberação encontrada para esta OS!');
-
     const items: ChecklistItem[] = osReleases.map(release => {
       const card = cards.find(c => c.id === release.cardId);
-      return {
-        item: release.cardName,
-        code: release.value,
-        responsible: release.responsible,
-        releaseDate: release.releaseDate,
-        isHeader: card?.includeInHeader || false,
-      };
+      return { item: release.cardName, code: release.value, responsible: release.responsible, releaseDate: release.releaseDate, isHeader: card?.includeInHeader || false };
     });
     setChecklistData(items);
   };
@@ -245,9 +231,16 @@ export default function EngineeringApp( ) {
     newCards[swapIndex] = cardToMove;
     setCards(newCards);
   };
-  // NOVA FUNÇÃO: Para alternar a visibilidade das opções
-  const toggleOptionsVisibility = (cardId: string) => {
-    setExpandedOptions(prev => ({ ...prev, [cardId]: !prev[cardId] }));
+  const toggleOptionsVisibility = (cardId: string) => setExpandedOptions(prev => ({ ...prev, [cardId]: !prev[cardId] }));
+
+  // NOVA FUNÇÃO: Para lidar com a adição em massa
+  const handleBulkAddOptions = () => {
+    if (!bulkAddState.cardId || !bulkAddState.text) return;
+    const newOptions = bulkAddState.text.split('\n').map(line => line.trim()).filter(line => line);
+    if (newOptions.length === 0) return;
+
+    setCards(cards.map(c => c.id === bulkAddState.cardId ? { ...c, options: [...c.options, ...newOptions] } : c));
+    setBulkAddState({ open: false, cardId: null, text: '' }); // Fecha e reseta o modal
   };
 
   // ==================================
@@ -265,9 +258,9 @@ export default function EngineeringApp( ) {
             <Button onClick={() => setShowAdmin(true)} variant="outline" className="w-full h-12 text-lg"><Settings className="mr-2 h-5 w-5" />Admin</Button>
           </CardContent>
         </Card>
-        <Dialog open={showAdmin} onOpenChange={setShowAdmin}>
-          <DialogContent><DialogHeader><DialogTitle>Acesso Administrativo</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label htmlFor="admin-password">Senha</Label><Input id="admin-password" type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAdminAccess()} /></div><DialogFooter><Button onClick={handleAdminAccess}>Entrar</Button></DialogFooter></DialogContent>
-        </Dialog>
+        <Dialog open={showAdmin} onOpenChange={setShowAdmin}><DialogContent><DialogHeader><DialogTitle>Acesso Administrativo</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label htmlFor="admin-password">Senha</Label><Input id="admin-password" type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAdminAccess()} /></div><DialogFooter><Button onClick={handleAdminAccess}>Entrar</Button></DialogFooter></DialogContent></Dialog>
+        
+        {/* MODAL PRINCIPAL DO ADMIN */}
         <Dialog open={isAdminAuthenticated} onOpenChange={setIsAdminAuthenticated}>
           <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Painel Administrativo</DialogTitle></DialogHeader>
@@ -288,20 +281,14 @@ export default function EngineeringApp( ) {
                       {card.type === 'dropdown' && (
                         <div className="space-y-2 pt-4 border-t">
                           <div className="flex justify-between items-center mb-2">
-                            {/* BOTÃO RETRÁTIL */}
-                            <Button variant="ghost" onClick={() => toggleOptionsVisibility(card.id)} className="flex-grow justify-start px-2">
-                              {expandedOptions[card.id] ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
-                              Opções da Lista ({card.options.length})
-                            </Button>
-                            <Button onClick={() => addOptionToCard(card.id)} size="sm" variant="outline"><Plus className="mr-1 h-3 w-3" />Opção</Button>
-                          </div>
-                          {/* RENDERIZAÇÃO CONDICIONAL DAS OPÇÕES */}
-                          {expandedOptions[card.id] && card.options.map((opt, i) => (
-                            <div key={i} className="flex gap-2 animate-in fade-in-0">
-                              <Input value={opt} onChange={(e) => updateCardOption(card.id, i, e.target.value)} />
-                              <Button onClick={() => removeCardOption(card.id, i)} variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" onClick={() => toggleOptionsVisibility(card.id)} className="flex-grow justify-start px-2">{expandedOptions[card.id] ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />} Opções da Lista ({card.options.length})</Button>
+                            <div className="flex gap-2">
+                              {/* BOTÃO DE ADIÇÃO EM MASSA */}
+                              <Button onClick={() => setBulkAddState({ open: true, cardId: card.id, text: '' })} size="sm" variant="outline"><Layers className="mr-1 h-3 w-3" />Em Massa</Button>
+                              <Button onClick={() => addOptionToCard(card.id)} size="sm" variant="outline"><Plus className="mr-1 h-3 w-3" />Opção</Button>
                             </div>
-                          ))}
+                          </div>
+                          {expandedOptions[card.id] && card.options.map((opt, i) => (<div key={i} className="flex gap-2 animate-in fade-in-0"><Input value={opt} onChange={(e) => updateCardOption(card.id, i, e.target.value)} /><Button onClick={() => removeCardOption(card.id, i)} variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button></div>))}
                         </div>
                       )}
                     </div>
@@ -328,6 +315,27 @@ export default function EngineeringApp( ) {
                 <DialogFooter><Button type="button" onClick={handleSaveRules} disabled={isSaving}>{isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando...</> : <><Save className="mr-2 h-4 w-4" />Salvar Todas as Regras</>}</Button></DialogFooter>
               </TabsContent>
             </Tabs>
+          </DialogContent>
+        </Dialog>
+
+        {/* NOVO MODAL: Para Adição em Massa */}
+        <Dialog open={bulkAddState.open} onOpenChange={(open) => !open && setBulkAddState({ open: false, cardId: null, text: '' })}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Adicionar Opções em Massa</DialogTitle></DialogHeader>
+            <div className="py-4 space-y-2">
+              <Label htmlFor="bulk-options">Cole ou digite as opções, uma por linha:</Label>
+              <textarea
+                id="bulk-options"
+                value={bulkAddState.text}
+                onChange={(e) => setBulkAddState(prev => ({ ...prev, text: e.target.value }))}
+                className="w-full p-2 border rounded-md min-h-[200px] bg-white"
+                placeholder="Opção A&#10;Opção B&#10;Opção C"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBulkAddState({ open: false, cardId: null, text: '' })}>Cancelar</Button>
+              <Button onClick={handleBulkAddOptions}>Adicionar Opções</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
