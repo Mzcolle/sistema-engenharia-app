@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Settings, Plus, Trash2, Save, Loader2 } from "lucide-react";
+import { Settings, Plus, Trash2, Save, Loader2, FileText, Copy } from "lucide-react";
 
 // ==================================
 // INTERFACES E ESTADOS
@@ -42,6 +42,14 @@ interface Rule {
   options: string[];
 }
 
+interface ChecklistItem {
+  item: string;
+  code: string;
+  responsible: string;
+  releaseDate: string;
+  isHeader: boolean;
+}
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:10000/api";
 
 export default function EngineeringApp( ) {
@@ -57,6 +65,11 @@ export default function EngineeringApp( ) {
   const [currentOS, setCurrentOS] = useState('');
   const [currentResponsible, setCurrentResponsible] = useState('');
   const [releaseData, setReleaseData] = useState<Record<string, string>>({});
+  
+  // Estados do Checklist
+  const [showChecklistModal, setShowChecklistModal] = useState(false);
+  const [checklistOS, setChecklistOS] = useState('');
+  const [checklistData, setChecklistData] = useState<ChecklistItem[]>([]);
 
   // ==================================
   // LÓGICA DE DADOS
@@ -176,6 +189,50 @@ export default function EngineeringApp( ) {
     }
   };
 
+  const generateChecklist = () => {
+    if (!checklistOS) return alert('Digite o número da OS!');
+    const osReleases = releases.filter(r => r.osNumber === checklistOS);
+    if (osReleases.length === 0) return alert('Nenhuma liberação encontrada para esta OS!');
+
+    const items: ChecklistItem[] = osReleases.map(release => {
+      const card = cards.find(c => c.id === release.cardId);
+      return {
+        item: release.cardName,
+        code: release.value,
+        responsible: release.responsible,
+        releaseDate: release.releaseDate,
+        isHeader: card?.includeInHeader || false,
+      };
+    });
+    setChecklistData(items);
+  };
+
+  const copyChecklistToClipboard = () => {
+    if (checklistData.length === 0) return;
+    let text = `CHECKLIST - OS ${checklistOS}\n\n`;
+    
+    const headerItems = checklistData.filter(item => item.isHeader);
+    const regularItems = checklistData.filter(item => !item.isHeader);
+
+    if (headerItems.length > 0) {
+      text += "=== ITENS PRINCIPAIS ===\n";
+      headerItems.forEach(item => {
+        text += `${item.item}: ${item.code}\n`;
+      });
+      text += "\n";
+    }
+
+    if (regularItems.length > 0) {
+      text += "=== DEMAIS ITENS ===\n";
+      regularItems.forEach(item => {
+        text += `${item.item}: ${item.code}\n`;
+      });
+    }
+    
+    navigator.clipboard.writeText(text);
+    alert('Checklist copiado para a área de transferência!');
+  };
+
   // ==================================
   // FUNÇÕES AUXILIARES
   // ==================================
@@ -230,9 +287,10 @@ export default function EngineeringApp( ) {
                       <div className="flex items-center gap-4">
                         <div className="flex-1"><Label>Nome do Cartão</Label><Input value={card.name} onChange={(e) => updateCard(card.id, 'name', e.target.value)} /></div>
                         <div><Label>Tipo</Label><Select value={card.type} onValueChange={(v: 'text' | 'dropdown') => updateCard(card.id, 'type', v)}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="text">Texto</SelectItem><SelectItem value="dropdown">Lista Suspensa</SelectItem></SelectContent></Select></div>
-                        <Button onClick={() => removeCard(card.id)} variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button>
+                        <div className="flex items-center space-x-2 pt-6"><Checkbox id={`header-${card.id}`} checked={card.includeInHeader} onCheckedChange={(checked) => updateCard(card.id, 'includeInHeader', !!checked)} /><Label htmlFor={`header-${card.id}`} className="text-sm font-medium">Inserir no cabeçalho?</Label></div>
+                        <Button onClick={() => removeCard(card.id)} variant="destructive" size="icon" className="self-end"><Trash2 className="h-4 w-4" /></Button>
                       </div>
-                      {card.type === 'dropdown' && <div className="space-y-2 pt-2 border-t"><div className="flex justify-between items-center mb-2"><Label>Opções da Lista</Label><Button onClick={() => addOptionToCard(card.id)} size="sm" variant="outline"><Plus className="mr-1 h-3 w-3" />Opção</Button></div>{card.options.map((opt, i) => <div key={i} className="flex gap-2"><Input value={opt} onChange={(e) => updateCardOption(card.id, i, e.target.value)} /><Button onClick={() => removeCardOption(card.id, i)} variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button></div>)}</div>}
+                      {card.type === 'dropdown' && <div className="space-y-2 pt-4 border-t"><div className="flex justify-between items-center mb-2"><Label>Opções da Lista</Label><Button onClick={() => addOptionToCard(card.id)} size="sm" variant="outline"><Plus className="mr-1 h-3 w-3" />Opção</Button></div>{card.options.map((opt, i) => <div key={i} className="flex gap-2"><Input value={opt} onChange={(e) => updateCardOption(card.id, i, e.target.value)} /><Button onClick={() => removeCardOption(card.id, i)} variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button></div>)}</div>}
                     </div>
                   </Card>
                 ))}
@@ -302,9 +360,52 @@ export default function EngineeringApp( ) {
             <div className="flex justify-center"><Button onClick={handleSaveRelease} disabled={isSaving} className="px-8 py-3 text-lg">{isSaving ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Salvando...</> : <><Save className="mr-2 h-5 w-5" />Salvar Liberação</>}</Button></div>
           </TabsContent>
           <TabsContent value="released" className="space-y-6 pt-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold">Códigos Liberados</h2>
+              <Button onClick={() => setShowChecklistModal(true)}><FileText className="mr-2 h-4 w-4" />Gerar Checklist</Button>
+            </div>
             <Card><CardContent className="p-4 overflow-x-auto"><table className="w-full"><thead><tr className="border-b bg-gray-50"><th className="text-left p-4 font-semibold">OS</th><th className="text-left p-4 font-semibold">Responsável</th><th className="text-left p-4 font-semibold">Data</th>{cards.map(c => <th key={c.id} className="text-left p-4 font-semibold">{c.name}</th>)}</tr></thead><tbody>{[...new Set(releases.map(r => r.osNumber))].map(os => { const osReleases = releases.filter(r => r.osNumber === os); const first = osReleases[0]; return <tr key={os} className="border-b hover:bg-gray-50"><td className="p-4 font-medium">{os}</td><td className="p-4">{first?.responsible}</td><td className="p-4">{first ? new Date(first.releaseDate).toLocaleDateString('pt-BR') : ''}</td>{cards.map(c => <td key={c.id} className="p-4">{osReleases.find(r => r.cardId === c.id)?.value || '-'}</td>)}</tr> })}</tbody></table></CardContent></Card>
           </TabsContent>
         </Tabs>
+
+        {/* MODAL DO CHECKLIST RESTAURADO E MELHORADO */}
+        <Dialog open={showChecklistModal} onOpenChange={setShowChecklistModal}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader><DialogTitle>Gerar Checklist de Liberação</DialogTitle></DialogHeader>
+            <div className="py-4 space-y-4">
+              <div className="flex gap-2 items-end">
+                <div className="flex-grow"><Label htmlFor="checklist-os">Número da OS</Label><Input id="checklist-os" value={checklistOS} onChange={(e) => setChecklistOS(e.target.value)} /></div>
+                <Button onClick={generateChecklist}>Gerar</Button>
+              </div>
+              {checklistData.length > 0 && (
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-semibold">Checklist para OS: {checklistOS}</h3>
+                    <Button variant="outline" size="sm" onClick={copyChecklistToClipboard}><Copy className="mr-2 h-4 w-4" />Copiar</Button>
+                  </div>
+                  <div className="border rounded-lg max-h-96 overflow-y-auto">
+                    {checklistData.filter(item => item.isHeader).length > 0 && (
+                      <div className="p-4 bg-blue-50 border-b">
+                        <h4 className="font-bold text-blue-700 mb-2">ITENS PRINCIPAIS</h4>
+                        <div className="space-y-1">
+                          {checklistData.filter(item => item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span><span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}
+                        </div>
+                      </div>
+                    )}
+                    {checklistData.filter(item => !item.isHeader).length > 0 && (
+                      <div className="p-4">
+                        <h4 className="font-bold text-gray-700 mb-2">DEMAIS ITENS</h4>
+                        <div className="space-y-1">
+                          {checklistData.filter(item => !item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span><span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
