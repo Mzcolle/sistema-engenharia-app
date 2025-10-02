@@ -1,6 +1,6 @@
 "use client";
 
-//versão final com todas as correções - v9 (BLINDAGEM TOTAL)
+//versão final com todas as correções - v10 (TESTE DE ISOLAMENTO)
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -250,12 +250,6 @@ export default function EngineeringApp( ) {
   // ==================================
   // RENDERIZAÇÃO
   // ==================================
-
-  // BLINDAGEM TOTAL: Se os arrays não foram inicializados, não renderiza NADA.
-  if (!cards || !releases || !rules) {
-      return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-blue-600" /></div>;
-  }
-
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-blue-600" /></div>;
 
   if (currentView === 'home') {
@@ -407,6 +401,8 @@ export default function EngineeringApp( ) {
             </div>
             <div className="flex justify-center"><Button onClick={handleSaveRelease} disabled={isSaving} className="px-8 py-3 text-lg">{isSaving ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Salvando...</> : <><Save className="mr-2 h-5 w-5" />Salvar Liberação</>}</Button></div>
           </TabsContent>
+          
+          {/* ABA DE LIBERADOS COM A CORREÇÃO */}
           <TabsContent value="released" className="space-y-6 pt-4">
             <div className="flex justify-between items-center"><h2 className="text-2xl font-bold">Códigos Liberados</h2><Button onClick={() => setShowChecklistModal(true)}><FileText className="mr-2 h-4 w-4" />Gerar Checklist</Button></div>
             <Card>
@@ -448,7 +444,8 @@ export default function EngineeringApp( ) {
                 <div className="space-y-4 pt-4 border-t">
                   <div className="flex justify-between items-center"><h3 className="text-lg font-semibold">Checklist para OS: {checklistOS}</h3><Button variant="outline" size="sm" onClick={copyChecklistToClipboard}><Copy className="mr-2 h-4 w-4" />Copiar</Button></div>
                   <div className="border rounded-lg max-h-96 overflow-y-auto">
-                    {checklistData.filter(item => item.isHeader).length > 0 && <div className="p-4 bg-blue-50 border-b"><h4 className="font-bold text-blue-700 mb-2">ITENS PRINCIPAIS</h4><div className="space-y-1">{checklistData.filter(item => item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span><span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}</div></div>}
+                    {checklistData.filter(item => item.isHeader).length > 0 && <div className="p-4 bg-blue-50 border-b"><h4 className="font-bold text-blue-700 mb-2">ITENS PRINCIPAIS</h4><div className="space-y-1">{checklistData.filter(item => item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span>
+<span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}</div></div>}
                     {checklistData.filter(item => !item.isHeader).length > 0 && <div className="p-4"><h4 className="font-bold text-gray-700 mb-2">DEMAIS ITENS</h4><div className="space-y-1">{checklistData.filter(item => !item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span><span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}</div></div>}
                   </div>
                 </div>
@@ -460,5 +457,3 @@ export default function EngineeringApp( ) {
     </div>
   );
 }
-
-                    
