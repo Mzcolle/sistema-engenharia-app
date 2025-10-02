@@ -1,7 +1,6 @@
 "use client";
 
-//versão final com todas as correções - v3
-
+//versão final com todas as correções - v4
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Settings, Plus, Trash2, Save, Loader2, FileText, Copy } from "lucide-react";
+import { Settings, Plus, Trash2, Save, Loader2, FileText, Copy, ArrowUp, ArrowDown } from "lucide-react";
 
 // ==================================
 // INTERFACES E ESTADOS
@@ -67,8 +66,6 @@ export default function EngineeringApp( ) {
   const [currentOS, setCurrentOS] = useState('');
   const [currentResponsible, setCurrentResponsible] = useState('');
   const [releaseData, setReleaseData] = useState<Record<string, string>>({});
-  
-  // Estados do Checklist
   const [showChecklistModal, setShowChecklistModal] = useState(false);
   const [checklistOS, setChecklistOS] = useState('');
   const [checklistData, setChecklistData] = useState<ChecklistItem[]>([]);
@@ -212,25 +209,17 @@ export default function EngineeringApp( ) {
   const copyChecklistToClipboard = () => {
     if (checklistData.length === 0) return;
     let text = `CHECKLIST - OS ${checklistOS}\n\n`;
-    
     const headerItems = checklistData.filter(item => item.isHeader);
     const regularItems = checklistData.filter(item => !item.isHeader);
-
     if (headerItems.length > 0) {
       text += "=== ITENS PRINCIPAIS ===\n";
-      headerItems.forEach(item => {
-        text += `${item.item}: ${item.code}\n`;
-      });
+      headerItems.forEach(item => { text += `${item.item}: ${item.code}\n`; });
       text += "\n";
     }
-
     if (regularItems.length > 0) {
       text += "=== DEMAIS ITENS ===\n";
-      regularItems.forEach(item => {
-        text += `${item.item}: ${item.code}\n`;
-      });
+      regularItems.forEach(item => { text += `${item.item}: ${item.code}\n`; });
     }
-    
     navigator.clipboard.writeText(text);
     alert('Checklist copiado para a área de transferência!');
   };
@@ -241,16 +230,18 @@ export default function EngineeringApp( ) {
   const addCard = () => setCards([...cards, { id: `temp-${Date.now()}`, name: '', type: 'text', options: [], includeInHeader: false }]);
   const updateCard = (id: string, field: keyof CardConfig, value: any) => setCards(cards.map(c => c.id === id ? { ...c, [field]: value } : c));
   const removeCard = (id: string) => setCards(cards.filter(c => c.id !== id));
-  const addOptionToCard = (cardId: string) => {
-    const newCards = cards.map(c => c.id === cardId ? { ...c, options: [...c.options, ''] } : c);
-    setCards(newCards);
-  };
-  const updateCardOption = (cardId: string, optIndex: number, value: string) => {
-    const newCards = cards.map(c => c.id === cardId ? { ...c, options: c.options.map((opt, i) => i === optIndex ? value : opt) } : c);
-    setCards(newCards);
-  };
-  const removeCardOption = (cardId: string, optIndex: number) => {
-    const newCards = cards.map(c => c.id === cardId ? { ...c, options: c.options.filter((_, i) => i !== optIndex) } : c);
+  const addOptionToCard = (cardId: string) => setCards(cards.map(c => c.id === cardId ? { ...c, options: [...c.options, ''] } : c));
+  const updateCardOption = (cardId: string, optIndex: number, value: string) => setCards(cards.map(c => c.id === cardId ? { ...c, options: c.options.map((opt, i) => i === optIndex ? value : opt) } : c));
+  const removeCardOption = (cardId: string, optIndex: number) => setCards(cards.map(c => c.id === cardId ? { ...c, options: c.options.filter((_, i) => i !== optIndex) } : c));
+  
+  // NOVA FUNÇÃO PARA REORDENAR OS CARTÕES
+  const moveCard = (index: number, direction: 'up' | 'down') => {
+    const newCards = [...cards];
+    const cardToMove = newCards[index];
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= newCards.length) return;
+    newCards[index] = newCards[swapIndex];
+    newCards[swapIndex] = cardToMove;
     setCards(newCards);
   };
 
@@ -263,18 +254,14 @@ export default function EngineeringApp( ) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
-          <CardHeader className="text-center"><CardTitle className="text-3xl font-bold text-gray-800 mb-2">Sistema de Engenharia</CardTitle><p className="text-gray-600">Liberação de Códigos</p></CardHeader>
+          <CardHeader className="text-center"><CardTitle className="text-3xl font-bold text-gray-800 mb-2">Everest Engenharia</CardTitle><p className="text-gray-600">Liberação de Códigos</p></CardHeader>
           <CardContent className="space-y-4">
             <Button onClick={() => setCurrentView('release')} className="w-full h-12 text-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">Iniciar</Button>
             <Button onClick={() => setShowAdmin(true)} variant="outline" className="w-full h-12 text-lg"><Settings className="mr-2 h-5 w-5" />Admin</Button>
           </CardContent>
         </Card>
         <Dialog open={showAdmin} onOpenChange={setShowAdmin}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Acesso Administrativo</DialogTitle></DialogHeader>
-            <div className="space-y-4 py-4"><Label htmlFor="admin-password">Senha</Label><Input id="admin-password" type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAdminAccess()} /></div>
-            <DialogFooter><Button onClick={handleAdminAccess}>Entrar</Button></DialogFooter>
-          </DialogContent>
+          <DialogContent><DialogHeader><DialogTitle>Acesso Administrativo</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label htmlFor="admin-password">Senha</Label><Input id="admin-password" type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAdminAccess()} /></div><DialogFooter><Button onClick={handleAdminAccess}>Entrar</Button></DialogFooter></DialogContent>
         </Dialog>
         <Dialog open={isAdminAuthenticated} onOpenChange={setIsAdminAuthenticated}>
           <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
@@ -283,13 +270,15 @@ export default function EngineeringApp( ) {
               <TabsList className="grid w-full grid-cols-2"><TabsTrigger value="cards">Configurar Cartões</TabsTrigger><TabsTrigger value="rules">Gerenciar Regras</TabsTrigger></TabsList>
               <TabsContent value="cards" className="space-y-6 pt-4">
                 <div className="flex justify-between items-center"><h3 className="text-lg font-semibold">Configurar Cartões</h3><Button onClick={addCard}><Plus className="mr-2 h-4 w-4" />Adicionar Cartão</Button></div>
-                {cards.map((card) => (
+                {cards.map((card, index) => (
                   <Card key={card.id} className="p-4">
                     <div className="space-y-4">
                       <div className="flex items-center gap-4">
+                        {/* BOTÕES DE REORDENAÇÃO */}
+                        <div className="flex flex-col gap-1"><Button onClick={() => moveCard(index, 'up')} disabled={index === 0} size="icon" variant="ghost"><ArrowUp className="h-4 w-4" /></Button><Button onClick={() => moveCard(index, 'down')} disabled={index === cards.length - 1} size="icon" variant="ghost"><ArrowDown className="h-4 w-4" /></Button></div>
                         <div className="flex-1"><Label>Nome do Cartão</Label><Input value={card.name} onChange={(e) => updateCard(card.id, 'name', e.target.value)} /></div>
                         <div><Label>Tipo</Label><Select value={card.type} onValueChange={(v: 'text' | 'dropdown') => updateCard(card.id, 'type', v)}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="text">Texto</SelectItem><SelectItem value="dropdown">Lista Suspensa</SelectItem></SelectContent></Select></div>
-                        <div className="flex items-center space-x-2 pt-6"><Checkbox id={`header-${card.id}`} checked={card.includeInHeader} onCheckedChange={(checked) => updateCard(card.id, 'includeInHeader', !!checked)} /><Label htmlFor={`header-${card.id}`} className="text-sm font-medium">Inserir no cabeçalho?</Label></div>
+                        <div className="flex items-center space-x-2 pt-6"><Checkbox id={`header-${card.id}`} checked={card.includeInHeader} onCheckedChange={(checked) => updateCard(card.id, 'includeInHeader', !!checked)} /><Label htmlFor={`header-${card.id}`} className="text-sm font-medium">No cabeçalho?</Label></div>
                         <Button onClick={() => removeCard(card.id)} variant="destructive" size="icon" className="self-end"><Trash2 className="h-4 w-4" /></Button>
                       </div>
                       {card.type === 'dropdown' && <div className="space-y-2 pt-4 border-t"><div className="flex justify-between items-center mb-2"><Label>Opções da Lista</Label><Button onClick={() => addOptionToCard(card.id)} size="sm" variant="outline"><Plus className="mr-1 h-3 w-3" />Opção</Button></div>{card.options.map((opt, i) => <div key={i} className="flex gap-2"><Input value={opt} onChange={(e) => updateCardOption(card.id, i, e.target.value)} /><Button onClick={() => removeCardOption(card.id, i)} variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button></div>)}</div>}
@@ -306,9 +295,9 @@ export default function EngineeringApp( ) {
                     <Card key={index} className="p-4 bg-gray-50">
                       <div className="flex justify-end mb-2"><Button onClick={() => setRules(rules.filter((_, i) => i !== index))} variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-red-500" /></Button></div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div><Label>QUANDO no cartão (Pai)</Label><Select value={rule.parent_card_id} onValueChange={(v) => setRules(rules.map((r, i) => i === index ? { ...r, parent_card_id: v } : r))}><SelectTrigger><SelectValue placeholder="Selecione o pai..." /></SelectTrigger><SelectContent>{cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+                        <div><Label>QUANDO no cartão (Pai)</Label><Select value={rule.parent_card_id} onValueChange={(v) => setRules(rules.map((r, i) => i === index ? { ...r, parent_card_id: v } : r))}><SelectTrigger><SelectValue placeholder="Selecione o Cartão Pai" /></SelectTrigger><SelectContent>{cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
                         <div><Label>o valor for</Label><Input value={rule.parent_option_value} placeholder="Digite o valor exato" onChange={(e) => setRules(rules.map((r, i) => i === index ? { ...r, parent_option_value: e.target.value } : r))} /></div>
-                        <div><Label>ENTÃO o cartão (Filho)</Label><Select value={rule.child_card_id} onValueChange={(v) => setRules(rules.map((r, i) => i === index ? { ...r, child_card_id: v } : r))}><SelectTrigger><SelectValue placeholder="Selecione o filho..." /></SelectTrigger><SelectContent>{cards.filter(c => c.type === 'dropdown').map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+                        <div><Label>ENTÃO o cartão (Filho)</Label><Select value={rule.child_card_id} onValueChange={(v) => setRules(rules.map((r, i) => i === index ? { ...r, child_card_id: v } : r))}><SelectTrigger><SelectValue placeholder="Selecione o Cartão Filho" /></SelectTrigger><SelectContent>{cards.filter(c => c.type === 'dropdown').map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
                       </div>
                       {childCard && <div className="mt-4"><Label>só poderá ter os valores:</Label><div className="p-4 border rounded-md bg-white grid grid-cols-2 md:grid-cols-4 gap-4 max-h-48 overflow-y-auto">{childCard.options.map((opt, optIndex) => <div key={optIndex} className="flex items-center space-x-2"><Checkbox id={`${index}-${optIndex}`} checked={rule.options.includes(opt)} onCheckedChange={(checked) => { const newOptions = checked ? [...rule.options, opt] : rule.options.filter(o => o !== opt); setRules(rules.map((r, i) => i === index ? { ...r, options: newOptions } : r)); }} /><label htmlFor={`${index}-${optIndex}`} className="text-sm font-medium leading-none">{opt}</label></div>)}</div></div>}
                     </Card>
@@ -326,7 +315,7 @@ export default function EngineeringApp( ) {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto p-4">
-        <div className="mb-6 flex justify-between items-center"><h1 className="text-3xl font-bold text-gray-800">Sistema de Engenharia</h1><Button onClick={() => setCurrentView('home')} variant="outline">Voltar ao Início</Button></div>
+        <div className="mb-6 flex justify-between items-center"><h1 className="text-3xl font-bold text-gray-800">Everest Engenharia</h1><Button onClick={() => setCurrentView('home')} variant="outline">Voltar ao Início</Button></div>
         <Tabs value={currentView} onValueChange={(v) => setCurrentView(v as any)}>
           <TabsList className="grid w-full grid-cols-2"><TabsTrigger value="release">Liberação</TabsTrigger><TabsTrigger value="released">Liberados</TabsTrigger></TabsList>
           <TabsContent value="release" className="space-y-6 pt-4">
@@ -353,7 +342,17 @@ export default function EngineeringApp( ) {
                   <Card key={card.id} className={isDisabled ? 'bg-gray-200' : ''}>
                     <CardHeader><CardTitle className="text-lg">{card.name}</CardTitle></CardHeader>
                     <CardContent>
-                      {isDropdown ? <Select value={releaseData[card.id] || ''} onValueChange={(v) => setReleaseData({ ...releaseData, [card.id]: v })} disabled={isDisabled}><SelectTrigger><SelectValue placeholder={isDisabled ? "Bloqueado" : "Selecione..."} /></SelectTrigger><SelectContent>{options.map((opt, i) => <SelectItem key={i} value={opt}>{opt}</SelectItem>)}</SelectContent></Select> : <Input value={releaseData[card.id] || ''} onChange={(e) => setReleaseData({ ...releaseData, [card.id]: e.target.value })} />}
+                      {isDropdown ? (
+                        <Select value={releaseData[card.id] || ''} onValueChange={(v) => setReleaseData({ ...releaseData, [card.id]: v === '--' ? '' : v })} disabled={isDisabled}>
+                          <SelectTrigger><SelectValue placeholder={isDisabled ? "Bloqueado (Selecione o Pai)" : "Selecione uma opção..."} /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="--">Selecione...</SelectItem>
+                            {options.map((opt, i) => <SelectItem key={i} value={opt}>{opt}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input value={releaseData[card.id] || ''} onChange={(e) => setReleaseData({ ...releaseData, [card.id]: e.target.value })} />
+                      )}
                     </CardContent>
                   </Card>
                 )
@@ -362,46 +361,21 @@ export default function EngineeringApp( ) {
             <div className="flex justify-center"><Button onClick={handleSaveRelease} disabled={isSaving} className="px-8 py-3 text-lg">{isSaving ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Salvando...</> : <><Save className="mr-2 h-5 w-5" />Salvar Liberação</>}</Button></div>
           </TabsContent>
           <TabsContent value="released" className="space-y-6 pt-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold">Códigos Liberados</h2>
-              <Button onClick={() => setShowChecklistModal(true)}><FileText className="mr-2 h-4 w-4" />Gerar Checklist</Button>
-            </div>
+            <div className="flex justify-between items-center"><h2 className="text-2xl font-bold">Códigos Liberados</h2><Button onClick={() => setShowChecklistModal(true)}><FileText className="mr-2 h-4 w-4" />Gerar Checklist</Button></div>
             <Card><CardContent className="p-4 overflow-x-auto"><table className="w-full"><thead><tr className="border-b bg-gray-50"><th className="text-left p-4 font-semibold">OS</th><th className="text-left p-4 font-semibold">Responsável</th><th className="text-left p-4 font-semibold">Data</th>{cards.map(c => <th key={c.id} className="text-left p-4 font-semibold">{c.name}</th>)}</tr></thead><tbody>{[...new Set(releases.map(r => r.osNumber))].map(os => { const osReleases = releases.filter(r => r.osNumber === os); const first = osReleases[0]; return <tr key={os} className="border-b hover:bg-gray-50"><td className="p-4 font-medium">{os}</td><td className="p-4">{first?.responsible}</td><td className="p-4">{first ? new Date(first.releaseDate).toLocaleDateString('pt-BR') : ''}</td>{cards.map(c => <td key={c.id} className="p-4">{osReleases.find(r => r.cardId === c.id)?.value || '-'}</td>)}</tr> })}</tbody></table></CardContent></Card>
           </TabsContent>
         </Tabs>
-
-        {/* MODAL DO CHECKLIST RESTAURADO E MELHORADO */}
         <Dialog open={showChecklistModal} onOpenChange={setShowChecklistModal}>
           <DialogContent className="max-w-2xl">
             <DialogHeader><DialogTitle>Gerar Checklist de Liberação</DialogTitle></DialogHeader>
             <div className="py-4 space-y-4">
-              <div className="flex gap-2 items-end">
-                <div className="flex-grow"><Label htmlFor="checklist-os">Número da OS</Label><Input id="checklist-os" value={checklistOS} onChange={(e) => setChecklistOS(e.target.value)} /></div>
-                <Button onClick={generateChecklist}>Gerar</Button>
-              </div>
+              <div className="flex gap-2 items-end"><div className="flex-grow"><Label htmlFor="checklist-os">Número da OS</Label><Input id="checklist-os" value={checklistOS} onChange={(e) => setChecklistOS(e.target.value)} /></div><Button onClick={generateChecklist}>Gerar</Button></div>
               {checklistData.length > 0 && (
                 <div className="space-y-4 pt-4 border-t">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-semibold">Checklist para OS: {checklistOS}</h3>
-                    <Button variant="outline" size="sm" onClick={copyChecklistToClipboard}><Copy className="mr-2 h-4 w-4" />Copiar</Button>
-                  </div>
+                  <div className="flex justify-between items-center"><h3 className="text-lg font-semibold">Checklist para OS: {checklistOS}</h3><Button variant="outline" size="sm" onClick={copyChecklistToClipboard}><Copy className="mr-2 h-4 w-4" />Copiar</Button></div>
                   <div className="border rounded-lg max-h-96 overflow-y-auto">
-                    {checklistData.filter(item => item.isHeader).length > 0 && (
-                      <div className="p-4 bg-blue-50 border-b">
-                        <h4 className="font-bold text-blue-700 mb-2">ITENS PRINCIPAIS</h4>
-                        <div className="space-y-1">
-                          {checklistData.filter(item => item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span><span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}
-                        </div>
-                      </div>
-                    )}
-                    {checklistData.filter(item => !item.isHeader).length > 0 && (
-                      <div className="p-4">
-                        <h4 className="font-bold text-gray-700 mb-2">DEMAIS ITENS</h4>
-                        <div className="space-y-1">
-                          {checklistData.filter(item => !item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span><span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}
-                        </div>
-                      </div>
-                    )}
+                    {checklistData.filter(item => item.isHeader).length > 0 && <div className="p-4 bg-blue-50 border-b"><h4 className="font-bold text-blue-700 mb-2">ITENS PRINCIPAIS</h4><div className="space-y-1">{checklistData.filter(item => item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span><span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}</div></div>}
+                    {checklistData.filter(item => !item.isHeader).length > 0 && <div className="p-4"><h4 className="font-bold text-gray-700 mb-2">DEMAIS ITENS</h4><div className="space-y-1">{checklistData.filter(item => !item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span><span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}</div></div>}
                   </div>
                 </div>
               )}
