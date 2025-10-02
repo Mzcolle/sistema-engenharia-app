@@ -8,13 +8,19 @@ const PORT = process.env.PORT || 10000;
 // Configuração do PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false } // obrigatório no Render
+  ssl: { rejectUnauthorized: false }
 });
 
-// Criação das tabelas se não existirem
+// ===============================================
+// INICIALIZAÇÃO DO BANCO DE DADOS (NOVA ESTRUTURA)
+// ===============================================
 (async () => {
+  const client = await pool.connect();
   try {
-    await pool.query(`
+    console.log('Verificando e criando tabelas do banco de dados...');
+    
+    // Tabela de Cartões (sem mudanças)
+    await client.query(`
       CREATE TABLE IF NOT EXISTS cards (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -24,7 +30,8 @@ const pool = new Pool({
       )
     `);
 
-    await pool.query(`
+    // Tabela de Liberações (sem mudanças)
+    await client.query(`
       CREATE TABLE IF NOT EXISTS releases (
         id SERIAL PRIMARY KEY,
         osNumber TEXT NOT NULL,
@@ -38,38 +45,43 @@ const pool = new Pool({
       )
     `);
 
-    // NOVAS TABELAS PARA AS REGRAS
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS card_rules (
+    // Tabela de Regras (simplificada)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS rules (
         id SERIAL PRIMARY KEY,
-        parent_card_id TEXT NOT NULL,
-        parent_option_value TEXT NOT NULL,
-        child_card_id TEXT NOT NULL
+        child_card_id TEXT NOT NULL,
+        child_options TEXT[] NOT NULL
       )
     `);
 
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS rule_options (
+    // Tabela de Condições (aqui está a mágica)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS rule_conditions (
         id SERIAL PRIMARY KEY,
         rule_id INTEGER NOT NULL,
-        option_value TEXT NOT NULL,
-        FOREIGN KEY (rule_id) REFERENCES card_rules(id) ON DELETE CASCADE
+        parent_card_id TEXT NOT NULL,
+        parent_option_values TEXT[] NOT NULL,
+        FOREIGN KEY (rule_id) REFERENCES rules(id) ON DELETE CASCADE
       )
     `);
 
     console.log('Tabelas do banco de dados verificadas/criadas com sucesso.');
   } catch (err) {
     console.error('Erro ao criar/verificar tabelas:', err.message);
+  } finally {
+    client.release();
   }
 })();
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Rota para testar se o servidor está no ar
-app.get('/api', (req, res) => {
-  res.send('Servidor da API está funcionando!');
-});
+// Rota de teste
+app.get('/api', (req, res) => res.send('Servidor da API está funcionando!'));
+
+// ===============================================
+// ROTAS EXISTENTES (sem mudanças na lógica principal)
+// ===============================================
 
 // Rotas para os cartões
 app.get('/api/cards', async (req, res) => {
@@ -126,19 +138,9 @@ app.post('/api/releases', async (req, res) => {
     await client.query('BEGIN');
     for (const release of releases) {
       const result = await client.query(
-        `INSERT INTO releases 
-        (osNumber, cardId, cardName, value, responsible, releaseDate, type, additionalNumber)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [
-          release.osNumber,
-          release.cardId,
-          release.cardName,
-          release.value,
-          release.responsible,
-          release.releaseDate,
-          release.type,
-          release.additionalNumber
-        ]
+        `INSERT INTO releases (osNumber, cardId, cardName, value, responsible, releaseDate, type, additionalNumber)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [release.osNumber, release.cardId, release.cardName, release.value, release.responsible, release.releaseDate, release.type, release.additionalNumber]
       );
       savedReleases.push(result.rows[0]);
     }
@@ -156,16 +158,12 @@ app.post('/api/releases', async (req, res) => {
 app.delete('/api/releases/:osNumber', async (req, res) => {
   const { osNumber } = req.params;
   const { admin_password } = req.headers;
-
   if (admin_password !== 'eve123_dev') {
     return res.status(403).json({ message: 'Acesso negado. Senha de admin incorreta.' });
   }
-
   try {
     const result = await pool.query('DELETE FROM releases WHERE osNumber = $1', [osNumber]);
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: `Nenhuma liberação encontrada para a OS ${osNumber}.` });
-    }
+    if (result.rowCount === 0) return res.status(404).json({ message: `Nenhuma liberação encontrada para a OS ${osNumber}.` });
     res.status(200).json({ message: `${result.rowCount} liberações da OS ${osNumber} foram deletadas com sucesso.` });
   } catch (err) {
     res.status(500).json({ message: 'Erro ao deletar liberações.', error: err.message });
@@ -173,20 +171,28 @@ app.delete('/api/releases/:osNumber', async (req, res) => {
 });
 
 // ===============================================
-// NOVAS ROTAS PARA AS REGRAS CONDICIONAIS
+// NOVAS ROTAS PARA REGRAS (ESTRUTURA COMPLEXA)
 // ===============================================
 
-// GET /api/rules - Busca todas as regras e suas opções
+// GET /api/rules - Busca e monta a estrutura de regras complexas
 app.get('/api/rules', async (req, res) => {
   try {
-    const rulesResult = await pool.query('SELECT * FROM card_rules');
-    const optionsResult = await pool.query('SELECT * FROM rule_options');
+    const rulesResult = await pool.query('SELECT * FROM rules');
+    const conditionsResult = await pool.query('SELECT * FROM rule_conditions');
     
     const rules = rulesResult.rows.map(rule => {
-      const options = optionsResult.rows
-        .filter(option => option.rule_id === rule.id)
-        .map(option => option.option_value);
-      return { ...rule, options };
+      const conditions = conditionsResult.rows
+        .filter(cond => cond.rule_id === rule.id)
+        .map(cond => ({
+          parent_card_id: cond.parent_card_id,
+          parent_option_values: cond.parent_option_values, // já é um array
+        }));
+      return { 
+        id: rule.id,
+        child_card_id: rule.child_card_id,
+        child_options: rule.child_options, // já é um array
+        conditions: conditions 
+      };
     });
     
     res.json(rules);
@@ -195,30 +201,32 @@ app.get('/api/rules', async (req, res) => {
   }
 });
 
-// POST /api/rules - Salva todas as regras (método de substituição total)
+// POST /api/rules - Salva a estrutura de regras complexas
 app.post('/api/rules', async (req, res) => {
   const rules = req.body; // Espera um array de regras do front-end
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Limpa as tabelas antigas em ordem (opções primeiro por causa da foreign key)
-    await client.query('DELETE FROM rule_options');
-    await client.query('DELETE FROM card_rules');
+    // Limpa as tabelas antigas em ordem (condições primeiro por causa da foreign key)
+    await client.query('DELETE FROM rule_conditions');
+    await client.query('DELETE FROM rules');
 
-    // Insere as novas regras e suas opções
+    // Insere as novas regras e suas condições
     for (const rule of rules) {
+      // 1. Insere a regra principal
       const ruleInsertResult = await client.query(
-        'INSERT INTO card_rules (parent_card_id, parent_option_value, child_card_id) VALUES ($1, $2, $3) RETURNING id',
-        [rule.parent_card_id, rule.parent_option_value, rule.child_card_id]
+        'INSERT INTO rules (child_card_id, child_options) VALUES ($1, $2) RETURNING id',
+        [rule.child_card_id, rule.child_options]
       );
       const newRuleId = ruleInsertResult.rows[0].id;
 
-      if (rule.options && rule.options.length > 0) {
-        for (const option of rule.options) {
+      // 2. Insere todas as condições associadas a essa regra
+      if (rule.conditions && rule.conditions.length > 0) {
+        for (const condition of rule.conditions) {
           await client.query(
-            'INSERT INTO rule_options (rule_id, option_value) VALUES ($1, $2)',
-            [newRuleId, option]
+            'INSERT INTO rule_conditions (rule_id, parent_card_id, parent_option_values) VALUES ($1, $2, $3)',
+            [newRuleId, condition.parent_card_id, condition.parent_option_values]
           );
         }
       }
@@ -233,7 +241,6 @@ app.post('/api/rules', async (req, res) => {
     client.release();
   }
 });
-
 
 app.listen(PORT, () => {
   console.log(`Servidor back-end rodando em http://localhost:${PORT}` );
