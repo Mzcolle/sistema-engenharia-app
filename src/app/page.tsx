@@ -1,6 +1,6 @@
 "use client";
 
-//versão final com todas as correções - v6
+//versão final com todas as correções - v7 (Regras Complexas)
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Settings, Plus, Trash2, Save, Loader2, FileText, Copy, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Layers } from "lucide-react";
 
 // ==================================
-// INTERFACES E ESTADOS
+// INTERFACES E ESTADOS (ESTRUTURA DE REGRAS ATUALIZADA)
 // ==================================
 interface CardConfig {
   id: string;
@@ -35,12 +35,17 @@ interface Release {
   additionalNumber?: number;
 }
 
+// NOVA ESTRUTURA DE REGRAS
+interface Condition {
+  parent_card_id: string;
+  parent_option_values: string[]; // Array para a lógica OU
+}
+
 interface Rule {
   id?: number;
-  parent_card_id: string;
-  parent_option_value: string;
   child_card_id: string;
-  options: string[];
+  child_options: string[];
+  conditions: Condition[]; // Array para a lógica E
 }
 
 interface ChecklistItem {
@@ -70,8 +75,6 @@ export default function EngineeringApp( ) {
   const [checklistOS, setChecklistOS] = useState('');
   const [checklistData, setChecklistData] = useState<ChecklistItem[]>([]);
   const [expandedOptions, setExpandedOptions] = useState<Record<string, boolean>>({});
-
-  // NOVO ESTADO: Para o modal de adição em massa
   const [bulkAddState, setBulkAddState] = useState<{ open: boolean; cardId: string | null; text: string }>({ open: false, cardId: null, text: '' });
 
   // ==================================
@@ -126,6 +129,21 @@ export default function EngineeringApp( ) {
   const handleSaveRules = async () => {
     setIsSaving(true);
     try {
+      // Validação: verifica se todas as regras e condições estão preenchidas
+      for (const rule of rules) {
+        if (!rule.child_card_id || rule.child_options.length === 0) {
+          throw new Error("Toda regra deve ter um Cartão Filho e ao menos uma Opção de Filho selecionada.");
+        }
+        if (rule.conditions.length === 0) {
+          throw new Error("Toda regra deve ter ao menos uma condição (Pai).");
+        }
+        for (const cond of rule.conditions) {
+          if (!cond.parent_card_id || cond.parent_option_values.length === 0) {
+            throw new Error("Toda condição deve ter um Cartão Pai e ao menos um Valor do Pai.");
+          }
+        }
+      }
+
       const response = await fetch(`${API_URL}/rules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -135,7 +153,7 @@ export default function EngineeringApp( ) {
       alert("Regras salvas com sucesso!");
       await fetchAllData();
     } catch (error) {
-      alert("Erro ao salvar regras.");
+      alert(`Erro ao salvar regras: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsSaving(false);
     }
@@ -232,15 +250,12 @@ export default function EngineeringApp( ) {
     setCards(newCards);
   };
   const toggleOptionsVisibility = (cardId: string) => setExpandedOptions(prev => ({ ...prev, [cardId]: !prev[cardId] }));
-
-  // NOVA FUNÇÃO: Para lidar com a adição em massa
   const handleBulkAddOptions = () => {
     if (!bulkAddState.cardId || !bulkAddState.text) return;
     const newOptions = bulkAddState.text.split('\n').map(line => line.trim()).filter(line => line);
     if (newOptions.length === 0) return;
-
     setCards(cards.map(c => c.id === bulkAddState.cardId ? { ...c, options: [...c.options, ...newOptions] } : c));
-    setBulkAddState({ open: false, cardId: null, text: '' }); // Fecha e reseta o modal
+    setBulkAddState({ open: false, cardId: null, text: '' });
   };
 
   // ==================================
@@ -260,7 +275,6 @@ export default function EngineeringApp( ) {
         </Card>
         <Dialog open={showAdmin} onOpenChange={setShowAdmin}><DialogContent><DialogHeader><DialogTitle>Acesso Administrativo</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label htmlFor="admin-password">Senha</Label><Input id="admin-password" type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAdminAccess()} /></div><DialogFooter><Button onClick={handleAdminAccess}>Entrar</Button></DialogFooter></DialogContent></Dialog>
         
-        {/* MODAL PRINCIPAL DO ADMIN */}
         <Dialog open={isAdminAuthenticated} onOpenChange={setIsAdminAuthenticated}>
           <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Painel Administrativo</DialogTitle></DialogHeader>
@@ -283,7 +297,6 @@ export default function EngineeringApp( ) {
                           <div className="flex justify-between items-center mb-2">
                             <Button variant="ghost" onClick={() => toggleOptionsVisibility(card.id)} className="flex-grow justify-start px-2">{expandedOptions[card.id] ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />} Opções da Lista ({card.options.length})</Button>
                             <div className="flex gap-2">
-                              {/* BOTÃO DE ADIÇÃO EM MASSA */}
                               <Button onClick={() => setBulkAddState({ open: true, cardId: card.id, text: '' })} size="sm" variant="outline"><Layers className="mr-1 h-3 w-3" />Em Massa</Button>
                               <Button onClick={() => addOptionToCard(card.id)} size="sm" variant="outline"><Plus className="mr-1 h-3 w-3" />Opção</Button>
                             </div>
@@ -296,19 +309,37 @@ export default function EngineeringApp( ) {
                 ))}
                 <DialogFooter><Button type="button" onClick={handleSaveCards} disabled={isSaving}>{isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando...</> : <><Save className="mr-2 h-4 w-4" />Salvar Cartões</>}</Button></DialogFooter>
               </TabsContent>
+              
+              {/* NOVA INTERFACE DE REGRAS COMPLEXAS */}
               <TabsContent value="rules" className="space-y-6 pt-4">
-                <div className="flex justify-between items-center"><h3 className="text-lg font-semibold">Regras Condicionais</h3><Button onClick={() => setRules([...rules, { parent_card_id: '', parent_option_value: '', child_card_id: '', options: [] }])}><Plus className="mr-2 h-4 w-4" />Adicionar Nova Regra</Button></div>
-                {rules.map((rule, index) => {
+                <div className="flex justify-between items-center"><h3 className="text-lg font-semibold">Regras Condicionais</h3><Button onClick={() => setRules([...rules, { child_card_id: '', child_options: [], conditions: [{ parent_card_id: '', parent_option_values: [] }] }])}><Plus className="mr-2 h-4 w-4" />Adicionar Nova Regra</Button></div>
+                {rules.map((rule, ruleIndex) => {
                   const childCard = cards.find(c => c.id === rule.child_card_id);
                   return (
-                    <Card key={index} className="p-4 bg-gray-50">
-                      <div className="flex justify-end mb-2"><Button onClick={() => setRules(rules.filter((_, i) => i !== index))} variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-red-500" /></Button></div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div><Label>QUANDO no cartão (Pai)</Label><Select value={rule.parent_card_id} onValueChange={(v) => setRules(rules.map((r, i) => i === index ? { ...r, parent_card_id: v } : r))}><SelectTrigger><SelectValue placeholder="Selecione o Cartão Pai" /></SelectTrigger><SelectContent>{cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-                        <div><Label>o valor for</Label><Input value={rule.parent_option_value} placeholder="Digite o valor exato" onChange={(e) => setRules(rules.map((r, i) => i === index ? { ...r, parent_option_value: e.target.value } : r))} /></div>
-                        <div><Label>ENTÃO o cartão (Filho)</Label><Select value={rule.child_card_id} onValueChange={(v) => setRules(rules.map((r, i) => i === index ? { ...r, child_card_id: v } : r))}><SelectTrigger><SelectValue placeholder="Selecione o Cartão Filho" /></SelectTrigger><SelectContent>{cards.filter(c => c.type === 'dropdown').map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+                    <Card key={ruleIndex} className="p-4 bg-gray-50 border-2 border-gray-200">
+                      <div className="flex justify-end mb-2"><Button onClick={() => setRules(rules.filter((_, i) => i !== ruleIndex))} variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-red-500" /></Button></div>
+                      
+                      {/* CONDIÇÕES (LÓGICA E) */}
+                      <div className="space-y-4 p-4 border rounded-md bg-white">
+                        <Label className="font-bold text-lg">SE (todas as condições forem verdadeiras):</Label>
+                        {rule.conditions.map((cond, condIndex) => (
+                          <div key={condIndex} className="p-3 border rounded-md bg-gray-50 space-y-2">
+                            <div className="flex justify-end"><Button onClick={() => { const newRules = [...rules]; newRules[ruleIndex].conditions.splice(condIndex, 1); setRules(newRules); }} variant="ghost" size="icon" className="h-6 w-6"><Trash2 className="h-3 w-3 text-gray-500" /></Button></div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div><Label>O cartão (Pai)</Label><Select value={cond.parent_card_id} onValueChange={(v) => { const newRules = [...rules]; newRules[ruleIndex].conditions[condIndex].parent_card_id = v; setRules(newRules); }}><SelectTrigger><SelectValue placeholder="Selecione o Cartão Pai" /></SelectTrigger><SelectContent>{cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+                              <div><Label>Tiver um dos valores (um por linha)</Label><textarea value={cond.parent_option_values.join('\n')} placeholder="Valor A&#10;Valor B" className="w-full p-2 border rounded-md min-h-[60px]" onChange={(e) => { const newRules = [...rules]; newRules[ruleIndex].conditions[condIndex].parent_option_values = e.target.value.split('\n').map(v => v.trim()).filter(Boolean); setRules(newRules); }} /></div>
+                            </div>
+                          </div>
+                        ))}
+                        <Button variant="outline" size="sm" onClick={() => { const newRules = [...rules]; newRules[ruleIndex].conditions.push({ parent_card_id: '', parent_option_values: [] }); setRules(newRules); }}><Plus className="mr-2 h-4 w-4" />Adicionar Condição (E)</Button>
                       </div>
-                      {childCard && <div className="mt-4"><Label>só poderá ter os valores:</Label><div className="p-4 border rounded-md bg-white grid grid-cols-2 md:grid-cols-4 gap-4 max-h-48 overflow-y-auto">{childCard.options.map((opt, optIndex) => <div key={optIndex} className="flex items-center space-x-2"><Checkbox id={`${index}-${optIndex}`} checked={rule.options.includes(opt)} onCheckedChange={(checked) => { const newOptions = checked ? [...rule.options, opt] : rule.options.filter(o => o !== opt); setRules(rules.map((r, i) => i === index ? { ...r, options: newOptions } : r)); }} /><label htmlFor={`${index}-${optIndex}`} className="text-sm font-medium leading-none">{opt}</label></div>)}</div></div>}
+
+                      {/* AÇÃO (LÓGICA ENTÃO) */}
+                      <div className="space-y-2 mt-4 p-4 border rounded-md bg-white">
+                        <Label className="font-bold text-lg">ENTÃO:</Label>
+                        <div><Label>O cartão (Filho)</Label><Select value={rule.child_card_id} onValueChange={(v) => { const newRules = [...rules]; newRules[ruleIndex].child_card_id = v; setRules(newRules); }}><SelectTrigger><SelectValue placeholder="Selecione o Cartão Filho" /></SelectTrigger><SelectContent>{cards.filter(c => c.type === 'dropdown').map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+                        {childCard && <div className="mt-2"><Label>Só poderá ter os valores:</Label><div className="p-4 border rounded-md bg-gray-50 grid grid-cols-2 md:grid-cols-4 gap-4 max-h-48 overflow-y-auto">{childCard.options.map((opt, optIndex) => <div key={optIndex} className="flex items-center space-x-2"><Checkbox id={`${ruleIndex}-${optIndex}`} checked={rule.child_options.includes(opt)} onCheckedChange={(checked) => { const newOptions = checked ? [...rule.child_options, opt] : rule.child_options.filter(o => o !== opt); setRules(rules.map((r, i) => i === ruleIndex ? { ...r, child_options: newOptions } : r)); }} /><label htmlFor={`${ruleIndex}-${optIndex}`} className="text-sm font-medium leading-none">{opt}</label></div>)}</div></div>}
+                      </div>
                     </Card>
                   )
                 })}
@@ -318,24 +349,11 @@ export default function EngineeringApp( ) {
           </DialogContent>
         </Dialog>
 
-        {/* NOVO MODAL: Para Adição em Massa */}
         <Dialog open={bulkAddState.open} onOpenChange={(open) => !open && setBulkAddState({ open: false, cardId: null, text: '' })}>
           <DialogContent>
             <DialogHeader><DialogTitle>Adicionar Opções em Massa</DialogTitle></DialogHeader>
-            <div className="py-4 space-y-2">
-              <Label htmlFor="bulk-options">Cole ou digite as opções, uma por linha:</Label>
-              <textarea
-                id="bulk-options"
-                value={bulkAddState.text}
-                onChange={(e) => setBulkAddState(prev => ({ ...prev, text: e.target.value }))}
-                className="w-full p-2 border rounded-md min-h-[200px] bg-white"
-                placeholder="Opção A&#10;Opção B&#10;Opção C"
-              />
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setBulkAddState({ open: false, cardId: null, text: '' })}>Cancelar</Button>
-              <Button onClick={handleBulkAddOptions}>Adicionar Opções</Button>
-            </DialogFooter>
+            <div className="py-4 space-y-2"><Label htmlFor="bulk-options">Cole ou digite as opções, uma por linha:</Label><textarea id="bulk-options" value={bulkAddState.text} onChange={(e) => setBulkAddState(prev => ({ ...prev, text: e.target.value }))} className="w-full p-2 border rounded-md min-h-[200px] bg-white" placeholder="Opção A&#10;Opção B&#10;Opção C" /></div>
+            <DialogFooter><Button variant="outline" onClick={() => setBulkAddState({ open: false, cardId: null, text: '' })}>Cancelar</Button><Button onClick={handleBulkAddOptions}>Adicionar Opções</Button></DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
@@ -352,36 +370,56 @@ export default function EngineeringApp( ) {
             <Card><CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4"><div><Label>Número da OS</Label><Input value={currentOS} onChange={(e) => setCurrentOS(e.target.value)} /></div><div><Label>Responsável</Label><Input value={currentResponsible} onChange={(e) => setCurrentResponsible(e.target.value)} /></div></CardContent></Card>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {cards.map((card) => {
-                const activeRules = rules.filter(r => r.child_card_id === card.id);
+                // LÓGICA DE APLICAÇÃO DE REGRAS COMPLEXAS
+                const applicableRules = rules.filter(r => r.child_card_id === card.id);
                 let options = card.options;
                 let isDisabled = false;
-                if (activeRules.length > 0) {
-                  const matchingRule = activeRules.find(r => releaseData[r.parent_card_id] === r.parent_option_value);
-                  if (matchingRule) {
-                    options = matchingRule.options;
-                  } else {
-                    const hasAnyParentValue = activeRules.some(r => releaseData[r.parent_card_id]);
-                    if (hasAnyParentValue) {
-                      isDisabled = true;
-                      options = [];
+
+                if (applicableRules.length > 0) {
+                  let ruleApplied = false;
+                  for (const rule of applicableRules) {
+                    // Verifica se TODAS as condições (E) da regra são verdadeiras
+                    const allConditionsMet = rule.conditions.every(cond => {
+                      const parentValue = releaseData[cond.parent_card_id];
+                      // Verifica se o valor do pai está DENTRO da lista de valores (OU)
+                      return parentValue && cond.parent_option_values.includes(parentValue);
+                    });
+
+                    if (allConditionsMet) {
+                      options = rule.child_options;
+                      ruleApplied = true;
+                      break; // Aplica a primeira regra que corresponder
                     }
                   }
+                  
+                  // Se nenhuma regra foi aplicada, mas existe uma regra para este filho, bloqueia o cartão
+                  if (!ruleApplied) {
+                    isDisabled = true;
+                    options = [];
+                  }
                 }
+
                 const isDropdown = card.type === 'dropdown';
                 return (
-                  <Card key={card.id} className={isDisabled ? 'bg-gray-200' : ''}>
+                  <Card key={card.id} className={isDisabled ? 'bg-gray-200 opacity-50' : ''}>
                     <CardHeader><CardTitle className="text-lg">{card.name}</CardTitle></CardHeader>
                     <CardContent>
                       {isDropdown ? (
-                        <Select value={releaseData[card.id] || ''} onValueChange={(v) => setReleaseData({ ...releaseData, [card.id]: v === '--' ? '' : v })} disabled={isDisabled}>
-                          <SelectTrigger><SelectValue placeholder={isDisabled ? "Bloqueado (Selecione o Pai)" : "Selecione uma opção..."} /></SelectTrigger>
+                        <Select value={releaseData[card.id] || ''} onValueChange={(v) => {
+                          const newReleaseData = { ...releaseData, [card.id]: v === '--' ? '' : v };
+                          // Limpa os filhos quando o pai muda
+                          rules.filter(r => r.conditions.some(c => c.parent_card_id === card.id))
+                               .forEach(r => { newReleaseData[r.child_card_id] = ''; });
+                          setReleaseData(newReleaseData);
+                        }} disabled={isDisabled}>
+                          <SelectTrigger><SelectValue placeholder={isDisabled ? "Bloqueado" : "Selecione..."} /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="--">Selecione...</SelectItem>
                             {options.map((opt, i) => <SelectItem key={i} value={opt}>{opt}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       ) : (
-                        <Input value={releaseData[card.id] || ''} onChange={(e) => setReleaseData({ ...releaseData, [card.id]: e.target.value })} />
+                        <Input value={releaseData[card.id] || ''} onChange={(e) => setReleaseData({ ...releaseData, [card.id]: e.target.value })} disabled={isDisabled} />
                       )}
                     </CardContent>
                   </Card>
@@ -392,7 +430,8 @@ export default function EngineeringApp( ) {
           </TabsContent>
           <TabsContent value="released" className="space-y-6 pt-4">
             <div className="flex justify-between items-center"><h2 className="text-2xl font-bold">Códigos Liberados</h2><Button onClick={() => setShowChecklistModal(true)}><FileText className="mr-2 h-4 w-4" />Gerar Checklist</Button></div>
-            <Card><CardContent className="p-4 overflow-x-auto"><table className="w-full"><thead><tr className="border-b bg-gray-50"><th className="text-left p-4 font-semibold">OS</th><th className="text-left p-4 font-semibold">Responsável</th><th className="text-left p-4 font-semibold">Data</th>{cards.map(c => <th key={c.id} className="text-left p-4 font-semibold">{c.name}</th>)}</tr></thead><tbody>{[...new Set(releases.map(r => r.osNumber))].map(os => { const osReleases = releases.filter(r => r.osNumber === os); const first = osReleases[0]; return <tr key={os} className="border-b hover:bg-gray-50"><td className="p-4 font-medium">{os}</td><td className="p-4">{first?.responsible}</td><td className="p-4">{first ? new Date(first.releaseDate).toLocaleDateString('pt-BR') : ''}</td>{cards.map(c => <td key={c.id} className="p-4">{osReleases.find(r => r.cardId === c.id)?.value || '-'}</td>)}</tr> })}</tbody></table></CardContent></Card>
+            <Card><CardContent className="p-4 overflow-x-auto"><table className="w-full"><thead><tr className="border-b bg-gray-50"><th className="text-left p-4 font-semibold">OS</th><th className="text-left p-4 font-semibold">Responsável</th><th className="text-left p-4 font-semibold">Data</th>{cards.map(c => <th key={c.id} className="text-left p-4 font-semibold">{c.name}</th>)}</tr></thead><tbody>{[...new Set(releases.map(r => r.osNumber))].map(os => { const osReleases = releases.
+filter(r => r.osNumber === os); const first = osReleases[0]; return <tr key={os} className="border-b hover:bg-gray-50"><td className="p-4 font-medium">{os}</td><td className="p-4">{first?.responsible}</td><td className="p-4">{first ? new Date(first.releaseDate).toLocaleDateString('pt-BR') : ''}</td>{cards.map(c => <td key={c.id} className="p-4">{osReleases.find(r => r.cardId === c.id)?.value || '-'}</td>)}</tr> })}</tbody></table></CardContent></Card>
           </TabsContent>
         </Tabs>
         <Dialog open={showChecklistModal} onOpenChange={setShowChecklistModal}>
