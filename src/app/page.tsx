@@ -1,6 +1,6 @@
 "use client";
 
-//versão final com todas as correções - v13 (CORREÇÃO DE ERROS MAP E REGRAS - SELECT MULTIPLE)
+//versão final com todas as correções - v14 (CORREÇÃO DE ERROS MAP E REGRAS - SELECT MULTIPLE E ADIÇÃO DE REGRAS)
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,7 +41,7 @@ interface Condition {
 }
 
 interface Rule {
-  id?: number;
+  id: string; // Adicionado ID para regras
   child_card_id: string;
   child_options: string[];
   conditions: Condition[];
@@ -233,7 +233,7 @@ export default function EngineeringApp( ) {
   const removeCard = (id: string) => setCards(cards.filter(c => c.id !== id));
   const addOptionToCard = (cardId: string) => setCards(cards.map(c => c.id === cardId ? { ...c, options: [...c.options, ''] } : c));
   const updateCardOption = (cardId: string, optIndex: number, value: string) => setCards(cards.map(c => c.id === cardId ? { ...c, options: c.options.map((opt, i) => i === optIndex ? value : opt) } : c));
-  const removeCardOption = (cardId: string, optIndex: number) => setCards(cards.map(c => c.id === cardId ? { ...c, options: c.options.filter((_, i) => i !== optIndex) } : c));
+  const removeCardOption = (cardId: string, optIndex: number) => setCards(cards.filter(c => c.id !== cardId).map(c => c.id === cardId ? { ...c, options: c.options.filter((_, i) => i !== optIndex) } : c));
   const moveCard = (index: number, direction: 'up' | 'down') => {
     const newCards = [...cards];
     const cardToMove = newCards[index];
@@ -306,12 +306,12 @@ export default function EngineeringApp( ) {
                 <DialogFooter><Button type="button" onClick={handleSaveCards} disabled={isSaving}>{isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando...</> : <><Save className="mr-2 h-4 w-4" />Salvar Cartões</>}</Button></DialogFooter>
               </TabsContent>
               <TabsContent value="rules" className="space-y-6 pt-4">
-                <div className="flex justify-between items-center"><h3 className="text-lg font-semibold">Regras Condicionais</h3><Button onClick={() => setRules([...rules, { child_card_id: '', child_options: [], conditions: [{ parent_card_id: '', parent_option_values: [] }] }])}><Plus className="mr-2 h-4 w-4" />Adicionar Nova Regra</Button></div>
+                <div className="flex justify-between items-center"><h3 className="text-lg font-semibold">Regras Condicionais</h3><Button onClick={() => setRules([...rules, { id: `rule-${Date.now()}`, child_card_id: '', child_options: [], conditions: [{ parent_card_id: '', parent_option_values: [] }] }])}><Plus className="mr-2 h-4 w-4" />Adicionar Nova Regra</Button></div>
                 {/* CORREÇÃO: Verificação de segurança antes do map */}
                 {Array.isArray(rules) && rules.map((rule, ruleIndex) => {
                   const childCard = cards.find(c => c.id === rule.child_card_id);
                   return (
-                    <Card key={ruleIndex} className="p-4 bg-gray-50 border-2 border-gray-200">
+                    <Card key={rule.id} className="p-4 bg-gray-50 border-2 border-gray-200">
                       <div className="flex justify-end mb-2"><Button onClick={() => setRules(rules.filter((_, i) => i !== ruleIndex))} variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-red-500" /></Button></div>
                       <div className="space-y-4 p-4 border rounded-md bg-white">
                         <Label className="font-bold text-lg">Condições (E):</Label>
@@ -367,7 +367,7 @@ export default function EngineeringApp( ) {
                       <div className="space-y-2 mt-4 p-4 border rounded-md bg-white">
                         <Label className="font-bold text-lg">ENTÃO:</Label>
                         <div><Label>O cartão (Filho)</Label><Select value={rule.child_card_id} onValueChange={(v) => { const newRules = [...rules]; newRules[ruleIndex].child_card_id = v; setRules(newRules); }}><SelectTrigger><SelectValue placeholder="Selecione o Cartão Filho" /></SelectTrigger><SelectContent>{Array.isArray(cards) && cards.filter(c => c.type === 'dropdown').map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-                        {childCard && <div className="mt-2"><Label>Só poderá ter os valores:</Label><div className="p-4 border rounded-md bg-gray-50 grid grid-cols-2 md:grid-cols-4 gap-4 max-h-48 overflow-y-auto">{Array.isArray(childCard.options) && childCard.options.map((opt, optIndex) => <div key={optIndex} className="flex items-center space-x-2"><Checkbox id={`${ruleIndex}-${optIndex}`} checked={Array.isArray(rule.child_options) && rule.child_options.includes(opt)} onCheckedChange={(checked) => { const newOptions = checked ? [...(rule.child_options || []), opt] : (rule.child_options || []).filter(o => o !== opt); setRules(rules.map((r, i) => i === ruleIndex ? { ...r, child_options: newOptions } : r)); }} /><label htmlFor={`${ruleIndex}-${optIndex}`} className="text-sm font-medium leading-none">{opt}</label></div>)}</div></div>}
+                        {childCard && <div className="mt-2"><Label>Só poderá ter os valores:</Label><div className="p-4 border rounded-md bg-gray-50 grid grid-cols-2 md:grid-cols-4 gap-4 max-h-48 overflow-y-auto">{Array.isArray(childCard.options) && childCard.options.map((opt, optIndex) => <div key={optIndex} className="flex items-center space-x-2"><Checkbox id={`${rule.id}-${optIndex}`} checked={Array.isArray(rule.child_options) && rule.child_options.includes(opt)} onCheckedChange={(checked) => { const newOptions = checked ? [...(rule.child_options || []), opt] : (rule.child_options || []).filter(o => o !== opt); setRules(rules.map((r, i) => i === ruleIndex ? { ...r, child_options: newOptions } : r)); }} /><label htmlFor={`${rule.id}-${optIndex}`} className="text-sm font-medium leading-none">{opt}</label></div>)}</div></div>}
                       </div>
                     </Card>
                   )
