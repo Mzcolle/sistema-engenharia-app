@@ -1,6 +1,5 @@
 "use client";
 
-//versão final com todas as correções - v14 (CORREÇÃO DE ERROS MAP E REGRAS - SELECT MULTIPLE E ADIÇÃO DE REGRAS)
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,7 +40,7 @@ interface Condition {
 }
 
 interface Rule {
-  id: string; // Adicionado ID para regras
+  id: string;
   child_card_id: string;
   child_options: string[];
   conditions: Condition[];
@@ -76,6 +75,11 @@ export default function EngineeringApp( ) {
   const [expandedOptions, setExpandedOptions] = useState<Record<string, boolean>>({});
   const [bulkAddState, setBulkAddState] = useState<{ open: boolean; cardId: string | null; text: string }>({ open: false, cardId: null, text: '' });
 
+  // --- NOVOS ESTADOS PARA EXCLUSÃO ---
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [releaseToDelete, setReleaseToDelete] = useState<Release | null>(null);
+  const [deletePassword, setDeletePassword] = useState('');
+
   // ==================================
   // LÓGICA DE DADOS
   // ==================================
@@ -93,14 +97,12 @@ export default function EngineeringApp( ) {
       const releasesData = await releasesRes.json();
       const rulesData = await rulesRes.json();
 
-      // CORREÇÃO: Garantir que os dados sejam arrays válidos
       setCards(Array.isArray(cardsData) ? cardsData : []);
       setReleases(Array.isArray(releasesData) ? releasesData : []);
       setRules(Array.isArray(rulesData) ? rulesData : []);
     } catch (error) {
       console.error("Falha ao buscar dados iniciais:", error);
       alert("Não foi possível carregar os dados do servidor. Tente recarregar a página.");
-      // CORREÇÃO: Garantir que os estados sejam arrays mesmo em caso de erro
       setCards([]);
       setReleases([]);
       setRules([]);
@@ -186,6 +188,53 @@ export default function EngineeringApp( ) {
     }
   };
 
+  // --- NOVA FUNÇÃO DE EXCLUSÃO ---
+  const handleDeleteRelease = async () => {
+    if (!releaseToDelete) return;
+
+    const ADMIN_PASSWORD = 'eve123_dev';
+
+    if (deletePassword !== ADMIN_PASSWORD) {
+      alert('Senha de administrador incorreta!');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const response = await fetch(`${API_URL}/releases/${releaseToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'admin_password': deletePassword 
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Falha ao deletar a liberação.');
+      }
+
+      alert(data.message);
+
+      // Atualiza a lista de liberações na tela, removendo a que foi excluída
+      // ATENÇÃO: A lógica aqui foi ajustada para remover todas as entradas da mesma OS
+      setReleases(prevReleases => prevReleases.filter(r => r.osNumber !== releaseToDelete.osNumber));
+
+      // Fecha o diálogo e limpa os estados
+      setShowDeleteDialog(false);
+      setReleaseToDelete(null);
+      setDeletePassword('');
+
+    } catch (error) {
+      console.error('Erro ao deletar liberação:', error);
+      alert(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleAdminAccess = () => {
     if (adminPassword === 'eve123_dev') {
       setIsAdminAuthenticated(true);
@@ -233,7 +282,7 @@ export default function EngineeringApp( ) {
   const removeCard = (id: string) => setCards(cards.filter(c => c.id !== id));
   const addOptionToCard = (cardId: string) => setCards(cards.map(c => c.id === cardId ? { ...c, options: [...c.options, ''] } : c));
   const updateCardOption = (cardId: string, optIndex: number, value: string) => setCards(cards.map(c => c.id === cardId ? { ...c, options: c.options.map((opt, i) => i === optIndex ? value : opt) } : c));
-  const removeCardOption = (cardId: string, optIndex: number) => setCards(cards.filter(c => c.id !== cardId).map(c => c.id === cardId ? { ...c, options: c.options.filter((_, i) => i !== optIndex) } : c));
+  const removeCardOption = (cardId: string, optIndex: number) => setCards(cards.map(c => c.id === cardId ? { ...c, options: c.options.filter((_, i) => i !== optIndex) } : c));
   const moveCard = (index: number, direction: 'up' | 'down') => {
     const newCards = [...cards];
     const cardToMove = newCards[index];
@@ -276,7 +325,6 @@ export default function EngineeringApp( ) {
               <TabsList className="grid w-full grid-cols-2"><TabsTrigger value="cards">Configurar Cartões</TabsTrigger><TabsTrigger value="rules">Gerenciar Regras</TabsTrigger></TabsList>
               <TabsContent value="cards" className="space-y-6 pt-4">
                 <div className="flex justify-between items-center"><h3 className="text-lg font-semibold">Configurar Cartões</h3><Button onClick={addCard}><Plus className="mr-2 h-4 w-4" />Adicionar Cartão</Button></div>
-                {/* CORREÇÃO: Verificação de segurança antes do map */}
                 {Array.isArray(cards) && cards.map((card, index) => (
                   <Card key={card.id} className="p-4">
                     <div className="space-y-4">
@@ -296,7 +344,6 @@ export default function EngineeringApp( ) {
                               <Button onClick={() => addOptionToCard(card.id)} size="sm" variant="outline"><Plus className="mr-1 h-3 w-3" />Opção</Button>
                             </div>
                           </div>
-                          {/* CORREÇÃO: Verificação de segurança antes do map */}
                           {expandedOptions[card.id] && Array.isArray(card.options) && card.options.map((opt, i) => (<div key={i} className="flex gap-2 animate-in fade-in-0"><Input value={opt} onChange={(e) => updateCardOption(card.id, i, e.target.value)} /><Button onClick={() => removeCardOption(card.id, i)} variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button></div>))}
                         </div>
                       )}
@@ -307,7 +354,6 @@ export default function EngineeringApp( ) {
               </TabsContent>
               <TabsContent value="rules" className="space-y-6 pt-4">
                 <div className="flex justify-between items-center"><h3 className="text-lg font-semibold">Regras Condicionais</h3><Button onClick={() => setRules([...rules, { id: `rule-${Date.now()}`, child_card_id: '', child_options: [], conditions: [{ parent_card_id: '', parent_option_values: [] }] }])}><Plus className="mr-2 h-4 w-4" />Adicionar Nova Regra</Button></div>
-                {/* CORREÇÃO: Verificação de segurança antes do map */}
                 {Array.isArray(rules) && rules.map((rule, ruleIndex) => {
                   const childCard = cards.find(c => c.id === rule.child_card_id);
                   return (
@@ -315,7 +361,6 @@ export default function EngineeringApp( ) {
                       <div className="flex justify-end mb-2"><Button onClick={() => setRules(rules.filter((_, i) => i !== ruleIndex))} variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-red-500" /></Button></div>
                       <div className="space-y-4 p-4 border rounded-md bg-white">
                         <Label className="font-bold text-lg">Condições (E):</Label>
-                        {/* CORREÇÃO: Verificação de segurança antes do map */}
                         {Array.isArray(rule.conditions) && rule.conditions.map((cond, condIndex) => {
                           const parentCard = cards.find(c => c.id === cond.parent_card_id);
                           return (
@@ -333,7 +378,6 @@ export default function EngineeringApp( ) {
                                     onValueChange={(v) => {
                                       const newRules = [...rules];
                                       newRules[ruleIndex].conditions[condIndex].parent_card_id = v;
-                                      // Limpar parent_option_values se o cartão pai mudar
                                       newRules[ruleIndex].conditions[condIndex].parent_option_values = [];
                                       setRules(newRules);
                                     }}
@@ -397,7 +441,6 @@ export default function EngineeringApp( ) {
           <TabsContent value="release" className="space-y-6 pt-4">
             <Card><CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4"><div><Label>Número da OS</Label><Input value={currentOS} onChange={(e) => setCurrentOS(e.target.value)} /></div><div><Label>Responsável</Label><Input value={currentResponsible} onChange={(e) => setCurrentResponsible(e.target.value)} /></div></CardContent></Card>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* CORREÇÃO: Verificação de segurança antes do map */}
               {Array.isArray(cards) && cards.map((card) => {
                 const applicableRules = Array.isArray(rules) ? rules.filter(r => r.child_card_id === card.id) : [];
                 let options = Array.isArray(card.options) ? card.options : [];
@@ -452,33 +495,50 @@ export default function EngineeringApp( ) {
             <div className="flex justify-center"><Button onClick={handleSaveRelease} disabled={isSaving} className="px-8 py-3 text-lg">{isSaving ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Salvando...</> : <><Save className="mr-2 h-5 w-5" />Salvar Liberação</>}</Button></div>
           </TabsContent>
           
-          {/* ABA DE LIBERADOS COM A CORREÇÃO PRINCIPAL */}
           <TabsContent value="released" className="space-y-6 pt-4">
             <div className="flex justify-between items-center"><h2 className="text-2xl font-bold">Códigos Liberados</h2><Button onClick={() => setShowChecklistModal(true)}><FileText className="mr-2 h-4 w-4" />Gerar Checklist</Button></div>
             <Card>
               <CardContent className="p-4 overflow-x-auto">
                 <table className="w-full">
+                  // ... continuação do arquivo src/app/page.tsx
+
                   <thead>
                     <tr className="border-b bg-gray-50">
                       <th className="text-left p-4 font-semibold">OS</th>
                       <th className="text-left p-4 font-semibold">Responsável</th>
                       <th className="text-left p-4 font-semibold">Data</th>
-                      {/* CORREÇÃO PRINCIPAL: Verificação de segurança antes do map */}
                       {Array.isArray(cards) && cards.map(c => <th key={c.id} className="text-left p-4 font-semibold">{c.name}</th>)}
+                      {/* --- COLUNA DE AÇÕES ADICIONADA --- */}
+                      <th className="text-center p-4 font-semibold">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {/* CORREÇÃO: Verificação de segurança antes do map */}
                     {Array.isArray(releases) && [...new Set(releases.map(r => r.osNumber))].map(os => {
                       const osReleases = releases.filter(r => r.osNumber === os);
                       const first = osReleases[0];
+                      if (!first) return null; // Adiciona uma verificação de segurança
+
                       return (
                         <tr key={os} className="border-b hover:bg-gray-50">
                           <td className="p-4 font-medium">{os}</td>
-                          <td className="p-4">{first?.responsible}</td>
-                          <td className="p-4">{first ? new Date(first.releaseDate).toLocaleDateString('pt-BR') : ''}</td>
-                          {/* CORREÇÃO: Verificação de segurança antes do map */}
+                          <td className="p-4">{first.responsible}</td>
+                          <td className="p-4">{new Date(first.releaseDate).toLocaleDateString('pt-BR')}</td>
                           {Array.isArray(cards) && cards.map(c => <td key={c.id} className="p-4">{osReleases.find(r => r.cardId === c.id)?.value || '-'}</td>)}
+                          
+                          {/* --- BOTÃO DE EXCLUSÃO ADICIONADO --- */}
+                          <td className="p-4 text-center">
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              onClick={() => {
+                                // 'first' representa a primeira entrada para essa OS, que usaremos para a exclusão
+                                setReleaseToDelete(first);
+                                setShowDeleteDialog(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
                         </tr>
                       )
                     })}
@@ -488,6 +548,8 @@ export default function EngineeringApp( ) {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* --- DIÁLOGO DE CHECKLIST (JÁ EXISTENTE) --- */}
         <Dialog open={showChecklistModal} onOpenChange={setShowChecklistModal}>
           <DialogContent className="max-w-2xl">
             <DialogHeader><DialogTitle>Gerar Checklist de Liberação</DialogTitle></DialogHeader>
@@ -497,9 +559,7 @@ export default function EngineeringApp( ) {
                 <div className="space-y-4 pt-4 border-t">
                   <div className="flex justify-between items-center"><h3 className="text-lg font-semibold">Checklist para OS: {checklistOS}</h3><Button variant="outline" size="sm" onClick={copyChecklistToClipboard}><Copy className="mr-2 h-4 w-4" />Copiar</Button></div>
                   <div className="border rounded-lg max-h-96 overflow-y-auto">
-                    {/* CORREÇÃO: Verificação de segurança antes do filter e map */}
-                    {Array.isArray(checklistData) && checklistData.filter(item => item.isHeader).length > 0 && <div className="p-4 bg-blue-50 border-b"><h4 className="font-bold text-blue-700 mb-2">ITENS PRINCIPAIS</h4><div className="space-y-1">{checklistData.filter(item => item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span>
-<span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}</div></div>}
+                    {Array.isArray(checklistData) && checklistData.filter(item => item.isHeader).length > 0 && <div className="p-4 bg-blue-50 border-b"><h4 className="font-bold text-blue-700 mb-2">ITENS PRINCIPAIS</h4><div className="space-y-1">{checklistData.filter(item => item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span><span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}</div></div>}
                     {Array.isArray(checklistData) && checklistData.filter(item => !item.isHeader).length > 0 && <div className="p-4"><h4 className="font-bold text-gray-700 mb-2">DEMAIS ITENS</h4><div className="space-y-1">{checklistData.filter(item => !item.isHeader).map((item, i) => <div key={i} className="flex justify-between"><span>{item.item}:</span><span className="font-mono bg-gray-200 px-2 rounded">{item.code}</span></div>)}</div></div>}
                   </div>
                 </div>
@@ -507,7 +567,58 @@ export default function EngineeringApp( ) {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* --- DIÁLOGO DE CONFIRMAÇÃO DE EXCLUSÃO (NOVO) --- */}
+        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirmar Exclusão</DialogTitle>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              <p>
+                Você tem certeza que deseja excluir a liberação para a OS{" "}
+                <span className="font-bold">{releaseToDelete?.osNumber}</span>?
+                  
+
+                Esta ação não pode ser desfeita.
+              </p>
+              <div>
+                <Label htmlFor="delete-password">Digite a senha de admin para confirmar:</Label>
+                <Input
+                  id="delete-password"
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="Senha de administrador"
+                  onKeyPress={(e) => e.key === 'Enter' && handleDeleteRelease()}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setShowDeleteDialog(false);
+                setDeletePassword('');
+                setReleaseToDelete(null);
+              }}>
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteRelease}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Excluindo...</>
+                ) : (
+                  "Excluir Permanentemente"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
       </div>
     </div>
   );
 }
+
