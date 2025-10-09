@@ -500,7 +500,6 @@ export default function EngineeringApp( ) {
             <Card>
               <CardContent className="p-4 overflow-x-auto">
                 <table className="w-full">
-                  // ... continuação do arquivo src/app/page.tsx
 
                   <thead>
                     <tr className="border-b bg-gray-50">
